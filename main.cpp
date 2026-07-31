@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iostream>
+#include <string>
 #include <utility>
 #include "model.h"
 #include "tgaimage.h"
@@ -89,11 +90,8 @@ std::pair<int,int> project(vec3 v) { // First of all, (x,y) is an orthogonal pro
              (v.y() + 1.) * height/2 }; // we want to shift the vector (x,y) and then scale it to span the entire screen.
 }
 
-int main(int argc, char** argv) {
-    TGAImage framebuffer(width, height, TGAImage::RGB);
-    
-    Model model("obj/diablo3_pose/diablo3_pose.obj");
-    //Model model("obj/african_head/african_head.obj");
+void render_model(TGAImage& framebuffer, const std::string& model_path) {
+    Model model(model_path);
 
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
         vec3 v0 = model.vert(i, 0);
@@ -107,8 +105,9 @@ int main(int argc, char** argv) {
         line(p0.first, p0.second, p2.first, p2.second, framebuffer, red);
         line(p1.first, p1.second, p2.first, p2.second, framebuffer, red);
     }
-    
-/*
+}
+
+void render_demo(TGAImage& framebuffer) {
     int ax =  7, ay =  3;
     int bx = 12, by = 37;
     int cx = 62, cy = 30;
@@ -120,9 +119,25 @@ int main(int argc, char** argv) {
     line(ax, ay, bx, by, framebuffer, blue);
     line(cx, cy, bx, by, framebuffer, green);
     line(cx, cy, ax, ay, framebuffer, yellow);
-    line(ax, ay, cx, cy, framebuffer, red);*/
+    line(ax, ay, cx, cy, framebuffer, red);
+}
+
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " path/to/model.obj\n"
+                  << "       " << argv[0] << " --demo\n";
+        return 1;
+    }
+
+    TGAImage framebuffer(width, height, TGAImage::RGB);
+
+    const std::string mode = argv[1];
+    if (mode == "--demo") {
+        render_demo(framebuffer);
+    } else {
+        render_model(framebuffer, mode);
+    }
     
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
 }
-
