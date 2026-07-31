@@ -1,7 +1,11 @@
 #include <cmath>
 #include <iostream>
 #include <utility>
+#include "model.h"
 #include "tgaimage.h"
+
+constexpr int width  = 800;
+constexpr int height = 800;
 
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
@@ -30,8 +34,8 @@ void lineShallow(int ax, int ay, int bx, int by, TGAImage& framebuffer, const TG
             float py = m * (i + 1) + ay; // how much y has moved at x = i+1
             //std::clog << "At i: " << i << ", py: " << py << "\n";
             float d0 = py - y;
-            float d1 = (y + 1) - py;
-            if (d0 - d1 >= 0) {
+            float d1 = (y + dir) - py;
+            if (std::abs(d0) - std::abs(d1) >= 0) {
                 y += dir;
             }
         }
@@ -59,8 +63,8 @@ void lineSteep(int ax, int ay, int bx, int by, TGAImage& framebuffer, const TGAC
             float px = m * (i + 1) + ax; // how much x has moved at y = i+1
             //std::clog << "At i: " << i << ", px: " << px << "\n";
             float d0 = px - x;
-            float d1 = (x + 1) - px;
-            if (d0 - d1 >= 0) {
+            float d1 = (x + dir) - px;
+            if (std::abs(d0) - std::abs(d1) >= 0) {
                 x += dir;
             }
         }
@@ -80,14 +84,34 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
+std::pair<int,int> project(vec3 v) { // First of all, (x,y) is an orthogonal projection of the vector (x,y,z), so drop the z completely
+    return { (v.x() + 1.) * width/2,   // Second, since the input models are scaled to have fit in the [-1,1]^3 world coordinates,
+             (v.y() + 1.) * height/2 }; // we want to shift the vector (x,y) and then scale it to span the entire screen.
+}
+
 int main(int argc, char** argv) {
-    constexpr int width  = 64;
-    constexpr int height = 64;
     TGAImage framebuffer(width, height, TGAImage::RGB);
     
+    Model model("obj/diablo3_pose/diablo3_pose.obj");
+    //Model model("obj/african_head/african_head.obj");
+
+    for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
+        vec3 v0 = model.vert(i, 0);
+        std::pair<int,int> p0 = project(v0);
+        vec3 v1 = model.vert(i, 1);
+        std::pair<int,int> p1 = project(v1);
+        vec3 v2 = model.vert(i, 2);
+        std::pair<int,int> p2 = project(v2);
+
+        line(p0.first, p0.second, p1.first, p1.second, framebuffer, red);
+        line(p0.first, p0.second, p2.first, p2.second, framebuffer, red);
+        line(p1.first, p1.second, p2.first, p2.second, framebuffer, red);
+    }
+    
+/*
     int ax =  7, ay =  3;
     int bx = 12, by = 37;
-    int cx = 62, cy = 53;
+    int cx = 62, cy = 30;
     
     framebuffer.set(ax, ay, white);
     framebuffer.set(bx, by, white);
@@ -96,7 +120,7 @@ int main(int argc, char** argv) {
     line(ax, ay, bx, by, framebuffer, blue);
     line(cx, cy, bx, by, framebuffer, green);
     line(cx, cy, ax, ay, framebuffer, yellow);
-    line(ax, ay, cx, cy, framebuffer, red);
+    line(ax, ay, cx, cy, framebuffer, red);*/
     
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
