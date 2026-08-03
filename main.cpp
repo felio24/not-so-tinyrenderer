@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -5,8 +6,8 @@
 #include "model.h"
 #include "tgaimage.h"
 
-constexpr int width  = 800;
-constexpr int height = 800;
+constexpr int width  = 280;
+constexpr int height = 280;
 
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
@@ -90,6 +91,59 @@ std::pair<int,int> project(vec3 v) { // First of all, (x,y) is an orthogonal pro
              (v.y() + 1.) * height/2 }; // we want to shift the vector (x,y) and then scale it to span the entire screen.
 }
 
+float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, const int& cx, const int& cy) {
+    // A = (ax(by - cy) + bx(cy - ay) + cx(ay - by)) / 2
+    return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+}
+
+void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
+    /* Attempt at scanline
+    // Bubble sort in ascending y
+    if (ay > by) {
+        std::swap(ax, bx);
+        std::swap(ay, by);
+    }
+    if (by > cy) {
+        std::swap(bx, cx);
+        std::swap(by, cy);
+    }
+    if (ay > by) {
+        std::swap(ax, bx);
+        std::swap(ay, by);
+    }
+
+    // Split into top half and bottom half at b
+    // Find the x coordinate between ac
+
+    line(ax, ay, bx, by, framebuffer, color);
+    line(bx, by, cx, cy, framebuffer, color);
+    line(cx, cy, ax, ay, framebuffer, color);
+    */
+
+    // Bounding box
+    // Look for minimum and max vertex coordinates
+    const int min_x = std::min(std::min(ax, bx), cx);
+    const int max_x = std::max(std::max(ax, bx), cx);
+    const int min_y = std::min(std::min(ay, by), cy);
+    const int max_y = std::max(std::max(ay, by), cy);
+
+    const float total_area = triangle_area(ax, ay, bx, by, cx, cy);
+    std::clog << "Total triangle area is " << total_area << std::endl;
+
+    for (int i = min_x; i <= max_x; i++) {
+        for (int j = min_y; j <= max_y; j++) {
+            // Calculate the barycentric coordinate
+            // P = uA + vB + wC
+            const double u = triangle_area(i, j, bx, by, cx, cy) / total_area;
+            const double v = triangle_area(i, j, cx, cy, ax, ay) / total_area;
+            const double w = triangle_area(i, j, ax, ay, bx, by) / total_area;
+
+            if (u < 0 || v < 0 || w < 0) continue;
+            framebuffer.set(i, j, color);
+        }
+    }
+}
+
 void render_model(TGAImage& framebuffer, const std::string& model_path) {
     Model model(model_path);
 
@@ -108,7 +162,7 @@ void render_model(TGAImage& framebuffer, const std::string& model_path) {
 }
 
 void render_demo(TGAImage& framebuffer) {
-    int ax =  7, ay =  3;
+    /*int ax =  7, ay =  3;
     int bx = 12, by = 37;
     int cx = 62, cy = 30;
     
@@ -119,7 +173,11 @@ void render_demo(TGAImage& framebuffer) {
     line(ax, ay, bx, by, framebuffer, blue);
     line(cx, cy, bx, by, framebuffer, green);
     line(cx, cy, ax, ay, framebuffer, yellow);
-    line(ax, ay, cx, cy, framebuffer, red);
+    line(ax, ay, cx, cy, framebuffer, red);*/
+
+    triangle(  7, 45, 35, 100, 45,  60, framebuffer, red);
+    triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
+    triangle(115, 83, 80,  90, 85, 120, framebuffer, green);
 }
 
 int main(int argc, char** argv) {
@@ -137,7 +195,7 @@ int main(int argc, char** argv) {
     } else {
         render_model(framebuffer, mode);
     }
-    
+
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
 }
