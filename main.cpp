@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -189,11 +190,15 @@ int main(int argc, char** argv) {
     TGAImage framebuffer(width, height, TGAImage::RGB);
 
     const std::string mode = argv[1];
+    const auto render_start = std::chrono::steady_clock::now();
     if (mode == "--demo") {
         render_demo(framebuffer);
     } else {
         render_model(framebuffer, mode);
     }
+    const auto render_end = std::chrono::steady_clock::now();
+    const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
+    std::clog << "Render time: " << render_duration.count() << " ms\n";
 
     framebuffer.write_tga_file("framebuffer.tga");
     return 0;
