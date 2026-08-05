@@ -105,7 +105,7 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
     return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
 }
 
-void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
+void triangle(const int& ax, const int& ay, const int& az, const int& bx, const int& by, const int& bz, const int& cx, const int& cy, const int& cz, TGAImage &framebuffer) {
     /* Attempt at scanline
     // Bubble sort in ascending y
     if (ay > by) {
@@ -151,7 +151,8 @@ void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuf
             const double w = triangle_area(i, j, ax, ay, bx, by) / total_area;
 
             if (u < 0 || v < 0 || w < 0) continue;
-            framebuffer.set(i, j, color);
+            unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz);
+            framebuffer.set(i, j, {z,0,z,0}); // BGRA, alpha doesn't matter for now
         }
     }
 }
@@ -167,29 +168,32 @@ void render_model(TGAImage& framebuffer, const std::string& model_path) {
         vec3 v2 = model.vert(i, 2);
         std::pair<int,int> p2 = project(v2);
 
-        TGAColor rnd;
-        for (int c=0; c<3; c++) rnd[c] = std::rand()%255;
-        triangle(p0.first, p0.second, p1.first, p1.second, p2.first, p2.second, framebuffer, rnd);
+        int c[3];
+        for (int j=0; j<3; j++) c[j] = std::rand()%255;
+        
+        triangle(p0.first, p0.second, c[0], p1.first, p1.second, c[1], p2.first, p2.second, c[2], framebuffer);
     }
 }
 
 void render_demo(TGAImage& framebuffer) {
-    /*int ax =  7, ay =  3;
-    int bx = 12, by = 37;
-    int cx = 62, cy = 30;
+    int ax = 17, ay =  4, az =  13;
+    int bx = 55, by = 39, bz = 128;
+    int cx = 23, cy = 59, cz = 255;
     
-    framebuffer.set(ax, ay, white);
+    /*framebuffer.set(ax, ay, white);
     framebuffer.set(bx, by, white);
     framebuffer.set(cx, cy, white);
     
     line(ax, ay, bx, by, framebuffer, blue);
     line(cx, cy, bx, by, framebuffer, green);
     line(cx, cy, ax, ay, framebuffer, yellow);
-    line(ax, ay, cx, cy, framebuffer, red);*/
+    line(ax, ay, cx, cy, framebuffer, red);
 
     triangle(  7, 45, 35, 100, 45,  60, framebuffer, red);
     triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
-    triangle(115, 83, 80,  90, 85, 120, framebuffer, green);
+    triangle(115, 83, 80,  90, 85, 120, framebuffer, green);*/
+
+    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer);
 }
 
 void log_openmp_status() {
