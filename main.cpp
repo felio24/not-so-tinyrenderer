@@ -7,6 +7,14 @@
 #include "model.h"
 #include "tgaimage.h"
 
+#ifndef RASTERIZER_PARALLEL
+#define RASTERIZER_PARALLEL 0
+#endif
+
+#if RASTERIZER_PARALLEL && defined(_OPENMP)
+#include <omp.h>
+#endif
+
 constexpr int width  = 800;
 constexpr int height = 800;
 
@@ -130,6 +138,10 @@ void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuf
 
     const float total_area = triangle_area(ax, ay, bx, by, cx, cy);
     if (total_area < 1) return;
+
+#if RASTERIZER_PARALLEL && defined(_OPENMP)
+#pragma omp parallel for
+#endif
     for (int i = min_x; i <= max_x; i++) {
         for (int j = min_y; j <= max_y; j++) {
             // Calculate the barycentric coordinate
@@ -180,12 +192,30 @@ void render_demo(TGAImage& framebuffer) {
     triangle(115, 83, 80,  90, 85, 120, framebuffer, green);
 }
 
+void log_openmp_status() {
+#if RASTERIZER_PARALLEL
+#ifdef _OPENMP
+#pragma omp parallel
+    {
+#pragma omp single
+        std::clog << "OpenMP enabled with " << omp_get_num_threads() << " threads\n";
+    }
+#else
+    std::clog << "OpenMP rasterization requested, but OpenMP is NOT enabled\n";
+#endif
+#else
+    std::clog << "OpenMP rasterization disabled\n";
+#endif
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " path/to/model.obj\n"
                   << "       " << argv[0] << " --demo\n";
         return 1;
     }
+
+    log_openmp_status();
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
 
