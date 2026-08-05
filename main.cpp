@@ -6,8 +6,8 @@
 #include "model.h"
 #include "tgaimage.h"
 
-constexpr int width  = 280;
-constexpr int height = 280;
+constexpr int width  = 800;
+constexpr int height = 800;
 
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
@@ -128,8 +128,7 @@ void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuf
     const int max_y = std::max(std::max(ay, by), cy);
 
     const float total_area = triangle_area(ax, ay, bx, by, cx, cy);
-    std::clog << "Total triangle area is " << total_area << std::endl;
-
+    if (total_area < 1) return;
     for (int i = min_x; i <= max_x; i++) {
         for (int j = min_y; j <= max_y; j++) {
             // Calculate the barycentric coordinate
@@ -146,7 +145,7 @@ void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuf
 
 void render_model(TGAImage& framebuffer, const std::string& model_path) {
     Model model(model_path);
-
+    std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
         vec3 v0 = model.vert(i, 0);
         std::pair<int,int> p0 = project(v0);
@@ -155,9 +154,9 @@ void render_model(TGAImage& framebuffer, const std::string& model_path) {
         vec3 v2 = model.vert(i, 2);
         std::pair<int,int> p2 = project(v2);
 
-        line(p0.first, p0.second, p1.first, p1.second, framebuffer, red);
-        line(p0.first, p0.second, p2.first, p2.second, framebuffer, red);
-        line(p1.first, p1.second, p2.first, p2.second, framebuffer, red);
+        TGAColor rnd;
+        for (int c=0; c<3; c++) rnd[c] = std::rand()%255;
+        triangle(p0.first, p0.second, p1.first, p1.second, p2.first, p2.second, framebuffer, rnd);
     }
 }
 
