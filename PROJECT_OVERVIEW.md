@@ -9,7 +9,7 @@ The goal is to build a small software renderer from scratch in C++. The renderer
 
 The tutorial describes the final renderer as roughly 500 lines of core code and estimates about 10-20 hours for students to start producing capable renders. For a deeper learning version where each step is understood and debugged, planning for more time is reasonable.
 
-Repo-specific setup, commands, and implementation notes live in `IMPLEMENTATION.md`.
+Repo-specific setup, commands, and implementation notes live in `README.md`.
 
 ## Big Picture Pipeline
 
