@@ -152,7 +152,9 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
 
             if (u < 0 || v < 0 || w < 0) continue;
             unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz);
-            framebuffer.set(i, j, {z,0,z,0}); // BGRA, alpha doesn't matter for now
+            framebuffer.set(i, j, {static_cast<unsigned char>(u * 255),
+                static_cast<unsigned char>(v * 255),
+                static_cast<unsigned char>(w * 255), 0}); // BGRA, alpha doesn't matter for now
         }
     }
 }
