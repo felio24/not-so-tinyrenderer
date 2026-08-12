@@ -28,13 +28,15 @@ constexpr int height = 800;
 enum class FillMode {
     Flat,
     Intensity,
-    Barycentric
+    Barycentric,
+    Wireframe
 };
 
 std::optional<FillMode> parse_fill_mode(const std::string& mode) {
     if (mode == "flat") return FillMode::Flat;
     if (mode == "intensity") return FillMode::Intensity;
     if (mode == "barycentric") return FillMode::Barycentric;
+    if (mode == "wireframe") return FillMode::Wireframe;
     return std::nullopt;
 }
 
@@ -43,6 +45,19 @@ TGAColor grayscale(unsigned char v) {
 }
 
 TGAColor barycentric_color(double u, double v, double w) {
+    return {{static_cast<unsigned char>(u * 255),
+            static_cast<unsigned char>(v * 255),
+            static_cast<unsigned char>(w * 255),
+            255}, 4};
+}
+
+TGAColor wireframe(double u, double v, double w) {
+    double width = 0.11;
+    double limit = 1 - width;
+    if (u + v < limit && v + w < limit && u + w < limit) {
+        return {{0,0,0,0},4};
+    }
+
     return {{static_cast<unsigned char>(u * 255),
             static_cast<unsigned char>(v * 255),
             static_cast<unsigned char>(w * 255),
@@ -131,29 +146,6 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
 }
 
 void triangle(const int& ax, const int& ay, const int& az, const int& bx, const int& by, const int& bz, const int& cx, const int& cy, const int& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color) {
-    /* Attempt at scanline
-    // Bubble sort in ascending y
-    if (ay > by) {
-        std::swap(ax, bx);
-        std::swap(ay, by);
-    }
-    if (by > cy) {
-        std::swap(bx, cx);
-        std::swap(by, cy);
-    }
-    if (ay > by) {
-        std::swap(ax, bx);
-        std::swap(ay, by);
-    }
-
-    // Split into top half and bottom half at b
-    // Find the x coordinate between ac
-
-    line(ax, ay, bx, by, framebuffer, color);
-    line(bx, by, cx, cy, framebuffer, color);
-    line(cx, cy, ax, ay, framebuffer, color);
-    */
-
     // Bounding box
     // Look for minimum and max vertex coordinates
     const int min_x = std::min(std::min(ax, bx), cx);
@@ -181,8 +173,10 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
             } else if (fill_mode == FillMode::Intensity) {
                 const unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz);
                 framebuffer.set(i, j, grayscale(z));
-            } else {
+            } else if (fill_mode == FillMode::Barycentric) {
                 framebuffer.set(i, j, barycentric_color(u, v, w));
+            } else {
+                framebuffer.set(i, j, wireframe(u, v, w));
             }
         }
     }
@@ -266,7 +260,7 @@ int main(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--fill") {
             if (i + 1 >= argc) {
-                std::cerr << "--fill expects flat, intensity, or barycentric\n";
+                std::cerr << "--fill expects flat, intensity, barycentric, or wireframe\n";
                 return 1;
             }
             const std::optional<FillMode> parsed_fill_mode = parse_fill_mode(argv[++i]);

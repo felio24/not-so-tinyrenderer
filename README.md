@@ -73,11 +73,13 @@ Triangle coloring can be switched without changing the rasterizer code:
 - `flat`: one random color per triangle.
 - `intensity`: interpolate a scalar value across the triangle and display it as grayscale.
 - `barycentric`: show barycentric coordinates as RGB-style channel gradients. The storage order is BGRA, so the helper handles the channel packing.
+- `wireframe`: show triangle edges using the barycentric coordinates.
 
 ```bash
 ./run.sh --fill flat
 ./run.sh --fill intensity
 ./run.sh --fill barycentric
+./run.sh --fill wireframe
 ```
 
 ## Runtime Output
