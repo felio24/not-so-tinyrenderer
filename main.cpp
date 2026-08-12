@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <utility>
@@ -226,6 +227,43 @@ void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
     triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer, fill_mode, red);
 }
 
+void render_model_painters(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
+    Model model(model_path);
+
+    std::vector<int> face_order(model.nfaces());
+    std::iota(face_order.begin(), face_order.end(), 0);
+    std::sort(face_order.begin(), face_order.end(), [&](int a, int b) {
+        auto face_z = [&](int iface) {
+            vec3 v0 = model.vert(iface, 0);
+            vec3 v1 = model.vert(iface, 1);
+            vec3 v2 = model.vert(iface, 2);
+            return (v0.z() + v1.z() + v2.z()) / 3.0;
+        };
+
+        return face_z(a) > face_z(b); // largest z first
+    });
+
+    std::srand(1234);
+    for (int i : face_order) {
+        vec3 v0 = model.vert(i, 0);
+        std::pair<int,int> p0 = project(v0);
+        vec3 v1 = model.vert(i, 1);
+        std::pair<int,int> p1 = project(v1);
+        vec3 v2 = model.vert(i, 2);
+        std::pair<int,int> p2 = project(v2);
+
+        unsigned char c[3];
+        for (int j=0; j<3; j++) c[j] = std::rand()%255;
+
+        TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
+        
+        triangle(p0.first, p0.second, c[0],
+                 p1.first, p1.second, c[1],
+                 p2.first, p2.second, c[2],
+                 framebuffer, fill_mode, flat_color);
+    }
+}
+
 void log_openmp_status() {
 #if RASTERIZER_PARALLEL
 #ifdef _OPENMP
@@ -282,7 +320,7 @@ int main(int argc, char** argv) {
     if (mode == "--demo") {
         render_demo(framebuffer, fill_mode);
     } else {
-        render_model(framebuffer, mode, fill_mode);
+        render_model_painters(framebuffer, mode, fill_mode);
     }
     const auto render_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
