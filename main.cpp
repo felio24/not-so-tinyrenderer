@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <utility>
 #include "model.h"
@@ -18,11 +19,35 @@
 constexpr int width  = 800;
 constexpr int height = 800;
 
-constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
-constexpr TGAColor green   = {  0, 255,   0, 255};
-constexpr TGAColor red     = {  0,   0, 255, 255};
-constexpr TGAColor blue    = {255, 128,  64, 255};
-constexpr TGAColor yellow  = {  0, 200, 255, 255};
+[[maybe_unused]] constexpr TGAColor white   = {{255, 255, 255, 255}, 4}; // attention, BGRA order
+[[maybe_unused]] constexpr TGAColor green   = {{  0, 255,   0, 255}, 4};
+[[maybe_unused]] constexpr TGAColor red     = {{  0,   0, 255, 255}, 4};
+[[maybe_unused]] constexpr TGAColor blue    = {{255, 128,  64, 255}, 4};
+[[maybe_unused]] constexpr TGAColor yellow  = {{  0, 200, 255, 255}, 4};
+
+enum class FillMode {
+    Flat,
+    Intensity,
+    Barycentric
+};
+
+std::optional<FillMode> parse_fill_mode(const std::string& mode) {
+    if (mode == "flat") return FillMode::Flat;
+    if (mode == "intensity") return FillMode::Intensity;
+    if (mode == "barycentric") return FillMode::Barycentric;
+    return std::nullopt;
+}
+
+TGAColor grayscale(unsigned char v) {
+    return {{v, v, v, 255}, 4};
+}
+
+TGAColor barycentric_color(double u, double v, double w) {
+    return {{static_cast<unsigned char>(u * 255),
+            static_cast<unsigned char>(v * 255),
+            static_cast<unsigned char>(w * 255),
+            255}, 4};
+}
 
 void lineShallow(int ax, int ay, int bx, int by, TGAImage& framebuffer, const TGAColor& color) {
     if (ax > bx) {
@@ -105,7 +130,7 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
     return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
 }
 
-void triangle(const int& ax, const int& ay, const int& az, const int& bx, const int& by, const int& bz, const int& cx, const int& cy, const int& cz, TGAImage &framebuffer) {
+void triangle(const int& ax, const int& ay, const int& az, const int& bx, const int& by, const int& bz, const int& cx, const int& cy, const int& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color) {
     /* Attempt at scanline
     // Bubble sort in ascending y
     if (ay > by) {
@@ -151,15 +176,19 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
             const double w = triangle_area(i, j, ax, ay, bx, by) / total_area;
 
             if (u < 0 || v < 0 || w < 0) continue;
-            unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz);
-            framebuffer.set(i, j, {static_cast<unsigned char>(u * 255),
-                static_cast<unsigned char>(v * 255),
-                static_cast<unsigned char>(w * 255), 0}); // BGRA, alpha doesn't matter for now
+            if (fill_mode == FillMode::Flat) {
+                framebuffer.set(i, j, flat_color);
+            } else if (fill_mode == FillMode::Intensity) {
+                const unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz);
+                framebuffer.set(i, j, grayscale(z));
+            } else {
+                framebuffer.set(i, j, barycentric_color(u, v, w));
+            }
         }
     }
 }
 
-void render_model(TGAImage& framebuffer, const std::string& model_path) {
+void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
@@ -170,14 +199,19 @@ void render_model(TGAImage& framebuffer, const std::string& model_path) {
         vec3 v2 = model.vert(i, 2);
         std::pair<int,int> p2 = project(v2);
 
-        int c[3];
+        unsigned char c[3];
         for (int j=0; j<3; j++) c[j] = std::rand()%255;
+
+        TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
-        triangle(p0.first, p0.second, c[0], p1.first, p1.second, c[1], p2.first, p2.second, c[2], framebuffer);
+        triangle(p0.first, p0.second, c[0],
+                 p1.first, p1.second, c[1],
+                 p2.first, p2.second, c[2],
+                 framebuffer, fill_mode, flat_color);
     }
 }
 
-void render_demo(TGAImage& framebuffer) {
+void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
     int ax = 17, ay =  4, az =  13;
     int bx = 55, by = 39, bz = 128;
     int cx = 23, cy = 59, cz = 255;
@@ -195,7 +229,7 @@ void render_demo(TGAImage& framebuffer) {
     triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
     triangle(115, 83, 80,  90, 85, 120, framebuffer, green);*/
 
-    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer);
+    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer, fill_mode, red);
 }
 
 void log_openmp_status() {
@@ -215,9 +249,10 @@ void log_openmp_status() {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 2) {
+    if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " path/to/model.obj\n"
-                  << "       " << argv[0] << " --demo\n";
+                  << "       " << argv[0] << " --demo\n"
+                  << "       " << argv[0] << " --fill flat|intensity|barycentric path/to/model.obj\n";
         return 1;
     }
 
@@ -225,12 +260,35 @@ int main(int argc, char** argv) {
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
 
-    const std::string mode = argv[1];
+    FillMode fill_mode = FillMode::Flat;
+    std::string mode;
+    for (int i = 1; i < argc; i++) {
+        const std::string arg = argv[i];
+        if (arg == "--fill") {
+            if (i + 1 >= argc) {
+                std::cerr << "--fill expects flat, intensity, or barycentric\n";
+                return 1;
+            }
+            const std::optional<FillMode> parsed_fill_mode = parse_fill_mode(argv[++i]);
+            if (!parsed_fill_mode) {
+                std::cerr << "Unknown fill mode: " << argv[i] << "\n";
+                return 1;
+            }
+            fill_mode = *parsed_fill_mode;
+        } else {
+            mode = arg;
+        }
+    }
+    if (mode.empty()) {
+        std::cerr << "Missing model path or --demo\n";
+        return 1;
+    }
+
     const auto render_start = std::chrono::steady_clock::now();
     if (mode == "--demo") {
-        render_demo(framebuffer);
+        render_demo(framebuffer, fill_mode);
     } else {
-        render_model(framebuffer, mode);
+        render_model(framebuffer, mode, fill_mode);
     }
     const auto render_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;

@@ -40,6 +40,8 @@ Useful variants:
 ```bash
 ./run.sh --demo
 ./run.sh obj/african_head/african_head.obj
+./run.sh --fill intensity --demo
+./run.sh --fill barycentric obj/diablo3_pose/diablo3_pose.obj
 ./run.sh --parallel obj/diablo3_pose/diablo3_pose.obj
 ./run.sh --serial obj/diablo3_pose/diablo3_pose.obj
 ```
@@ -63,6 +65,20 @@ build/not_so_tinyrenderer obj/diablo3_pose/diablo3_pose.obj
 Use `RASTERIZER_PARALLEL=0` to return to the serial baseline.
 
 On macOS, OpenMP uses CPU threads through Homebrew `libomp`; it does not use the GPU.
+
+## Fill Modes
+
+Triangle coloring can be switched without changing the rasterizer code:
+
+- `flat`: one random color per triangle.
+- `intensity`: interpolate a scalar value across the triangle and display it as grayscale.
+- `barycentric`: show barycentric coordinates as RGB-style channel gradients. The storage order is BGRA, so the helper handles the channel packing.
+
+```bash
+./run.sh --fill flat
+./run.sh --fill intensity
+./run.sh --fill barycentric
+```
 
 ## Runtime Output
 
