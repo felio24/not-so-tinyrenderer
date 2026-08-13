@@ -136,9 +136,10 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
-std::pair<int,int> project(vec3 v) { // First of all, (x,y) is an orthogonal projection of the vector (x,y,z), so drop the z completely
-    return { (v.x() + 1.) * width/2,   // Second, since the input models are scaled to have fit in the [-1,1]^3 world coordinates,
-             (v.y() + 1.) * height/2 }; // we want to shift the vector (x,y) and then scale it to span the entire screen.
+std::tuple<int,int,int> project(vec3 v) { // First of all, (x,y) is an orthogonal projection of the vector (x,y,z), so drop the z completely
+    return { (v.x() + 1.) *  width/2,   // Second, since the input models are scaled to have fit in the [-1,1]^3 world coordinates,
+             (v.y() + 1.) * height/2,  // we want to shift the vector (x,y) and then scale it to span the entire screen.
+             (v.z() + 1.) *   255./2};
 }
 
 float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, const int& cx, const int& cy) {
@@ -146,7 +147,7 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
     return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
 }
 
-void triangle(const int& ax, const int& ay, const int& az, const int& bx, const int& by, const int& bz, const int& cx, const int& cy, const int& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color) {
+void triangle(const int& ax, const int& ay, const int& az, const int& bx, const int& by, const int& bz, const int& cx, const int& cy, const int& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, TGAImage& zbuffer) {
     // Bounding box
     // Look for minimum and max vertex coordinates
     const int min_x = std::min(std::min(ax, bx), cx);
@@ -169,6 +170,10 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
             const double w = triangle_area(i, j, ax, ay, bx, by) / total_area;
 
             if (u < 0 || v < 0 || w < 0) continue;
+
+            unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz); // Compute depth
+            zbuffer.set(i, j, {z}); // Update depth buffer
+
             if (fill_mode == FillMode::Flat) {
                 framebuffer.set(i, j, flat_color);
             } else if (fill_mode == FillMode::Intensity) {
@@ -183,30 +188,25 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
     }
 }
 
-void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
+void render_model(TGAImage& framebuffer, TGAImage& zbuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
-        vec3 v0 = model.vert(i, 0);
-        std::pair<int,int> p0 = project(v0);
-        vec3 v1 = model.vert(i, 1);
-        std::pair<int,int> p1 = project(v1);
-        vec3 v2 = model.vert(i, 2);
-        std::pair<int,int> p2 = project(v2);
+        auto [ax, ay, az] = project(model.vert(i, 0));
+        auto [bx, by, bz] = project(model.vert(i, 1));
+        auto [cx, cy, cz] = project(model.vert(i, 2));
 
         unsigned char c[3];
         for (int j=0; j<3; j++) c[j] = std::rand()%255;
 
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
-        triangle(p0.first, p0.second, c[0],
-                 p1.first, p1.second, c[1],
-                 p2.first, p2.second, c[2],
-                 framebuffer, fill_mode, flat_color);
+        triangle(ax, ay, az, bx, by, bz, cx, cy, cz,
+                 framebuffer, fill_mode, flat_color, zbuffer);
     }
 }
 
-void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
+void render_demo(TGAImage& framebuffer, TGAImage& zbuffer, FillMode fill_mode) {
     int ax = 17, ay =  4, az =  13;
     int bx = 55, by = 39, bz = 128;
     int cx = 23, cy = 59, cz = 255;
@@ -224,10 +224,10 @@ void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
     triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
     triangle(115, 83, 80,  90, 85, 120, framebuffer, green);*/
 
-    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer, fill_mode, red);
+    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer, fill_mode, red, zbuffer);
 }
 
-void render_model_painters(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
+void render_model_painters(TGAImage& framebuffer, TGAImage& zbuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
 
     std::vector<int> face_order(model.nfaces());
@@ -245,22 +245,17 @@ void render_model_painters(TGAImage& framebuffer, const std::string& model_path,
 
     std::srand(1234);
     for (int i : face_order) {
-        vec3 v0 = model.vert(i, 0);
-        std::pair<int,int> p0 = project(v0);
-        vec3 v1 = model.vert(i, 1);
-        std::pair<int,int> p1 = project(v1);
-        vec3 v2 = model.vert(i, 2);
-        std::pair<int,int> p2 = project(v2);
+        auto [ax, ay, az] = project(model.vert(i, 0));
+        auto [bx, by, bz] = project(model.vert(i, 1));
+        auto [cx, cy, cz] = project(model.vert(i, 2));
 
         unsigned char c[3];
         for (int j=0; j<3; j++) c[j] = std::rand()%255;
 
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
-        triangle(p0.first, p0.second, c[0],
-                 p1.first, p1.second, c[1],
-                 p2.first, p2.second, c[2],
-                 framebuffer, fill_mode, flat_color);
+        triangle(ax, ay, az, bx, by, bz, cx, cy, cz,
+                 framebuffer, fill_mode, flat_color, zbuffer);
     }
 }
 
@@ -291,6 +286,7 @@ int main(int argc, char** argv) {
     log_openmp_status();
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
+    TGAImage     zbuffer(width, height, TGAImage::GRAYSCALE);
 
     FillMode fill_mode = FillMode::Flat;
     std::string mode;
@@ -318,14 +314,15 @@ int main(int argc, char** argv) {
 
     const auto render_start = std::chrono::steady_clock::now();
     if (mode == "--demo") {
-        render_demo(framebuffer, fill_mode);
+        render_demo(framebuffer, zbuffer, fill_mode);
     } else {
-        render_model_painters(framebuffer, mode, fill_mode);
+        render_model(framebuffer, zbuffer, mode, fill_mode);
     }
     const auto render_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
     std::clog << "Render time: " << render_duration.count() << " ms\n";
 
     framebuffer.write_tga_file("framebuffer.tga");
+    zbuffer.write_tga_file("zbuffer.tga");
     return 0;
 }
