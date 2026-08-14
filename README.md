@@ -84,9 +84,9 @@ Triangle coloring can be switched without changing the rasterizer code:
 
 ## Depth Convention
 
-The current projection maps model-space `z` from `[-1, 1]` into grayscale/depth values `[0, 255]`.
-Larger projected depth values are treated as closer to the camera, so nearer pixels overwrite farther pixels in the z-buffer test.
-In the debug `zbuffer.tga`, farther pixels are darker and closer pixels are brighter.
+The depth buffer stores real model-space `z` values, initialized to `-infinity`.
+Larger `z` values are treated as closer to the camera, so nearer pixels overwrite farther pixels in the z-buffer test.
+Only the debug `zbuffer.tga` maps model-space `z` from `[-1, 1]` into grayscale `[0, 255]`, with farther pixels darker and closer pixels brighter.
 
 ## Runtime Output
 

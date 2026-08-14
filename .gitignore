@@ -1,4 +1,5 @@
-framebuffer.tga
+*.tga
+PROJECT_OVERVIEW.md
 
 # macOS
 .DS_Store

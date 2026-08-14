@@ -2,10 +2,13 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
+#include <vector>
 #include "model.h"
 #include "tgaimage.h"
 
@@ -43,6 +46,21 @@ std::optional<FillMode> parse_fill_mode(const std::string& mode) {
 
 TGAColor grayscale(unsigned char v) {
     return {{v, v, v, 255}, 4};
+}
+
+TGAImage depthbuffer_to_image(const std::vector<double>& depthbuffer) {
+    TGAImage zbuffer(width, height, TGAImage::GRAYSCALE);
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const double z = depthbuffer[x + y * width];
+            if (z == -std::numeric_limits<double>::infinity()) continue;
+
+            const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
+            const TGAColor color = {{static_cast<unsigned char>(shade), 0, 0, 0}, 1};
+            zbuffer.set(x, y, color);
+        }
+    }
+    return zbuffer;
 }
 
 TGAColor barycentric_color(double u, double v, double w) {
@@ -136,10 +154,10 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
-std::tuple<int,int,int> project(vec3 v) { // First of all, (x,y) is an orthogonal projection of the vector (x,y,z), so drop the z completely
-    return { (v.x() + 1.) *  width/2,   // Second, since the input models are scaled to have fit in the [-1,1]^3 world coordinates,
-             (v.y() + 1.) * height/2,  // we want to shift the vector (x,y) and then scale it to span the entire screen.
-             (v.z() + 1.) *   255./2};
+std::tuple<int,int,double> project(vec3 v) {
+    return { (v.x() + 1.) *  width/2,  // The input models are scaled to fit in [-1,1]^3, so shift x/y and scale them to screen space.
+             (v.y() + 1.) * height/2,
+             v.z() };
 }
 
 float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, const int& cx, const int& cy) {
@@ -147,7 +165,7 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
     return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
 }
 
-void triangle(const int& ax, const int& ay, const int& az, const int& bx, const int& by, const int& bz, const int& cx, const int& cy, const int& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, TGAImage& zbuffer) {
+void triangle(const int& ax, const int& ay, const double& az, const int& bx, const int& by, const double& bz, const int& cx, const int& cy, const double& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
     // Bounding box
     // Look for minimum and max vertex coordinates
     const int min_x = std::min(std::min(ax, bx), cx);
@@ -171,14 +189,16 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
 
             if (u < 0 || v < 0 || w < 0) continue;
 
-            unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz); // Compute depth
-            if (zbuffer.get(i, j).bgra[0] >= z) continue; // Only update depth buffer if current pixel is closer to camera than depth buffer
-            zbuffer.set(i, j, {z});
+            const double z = u * az + v * bz + w * cz; // Compute depth
+            const int depth_index = i + j * width;
+            if (depthbuffer[depth_index] >= z) continue; // Larger z means closer to camera.
+
+            depthbuffer[depth_index] = z;
             if (fill_mode == FillMode::Flat) {
                 framebuffer.set(i, j, flat_color);
             } else if (fill_mode == FillMode::Intensity) {
-                const unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz);
-                framebuffer.set(i, j, grayscale(z));
+                const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
+                framebuffer.set(i, j, grayscale(static_cast<unsigned char>(shade)));
             } else if (fill_mode == FillMode::Barycentric) {
                 framebuffer.set(i, j, barycentric_color(u, v, w));
             } else {
@@ -188,7 +208,7 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
     }
 }
 
-void render_model(TGAImage& framebuffer, TGAImage& zbuffer, const std::string& model_path, FillMode fill_mode) {
+void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
@@ -202,11 +222,11 @@ void render_model(TGAImage& framebuffer, TGAImage& zbuffer, const std::string& m
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
         triangle(ax, ay, az, bx, by, bz, cx, cy, cz,
-                 framebuffer, fill_mode, flat_color, zbuffer);
+                 framebuffer, fill_mode, flat_color, depthbuffer);
     }
 }
 
-void render_demo(TGAImage& framebuffer, TGAImage& zbuffer, FillMode fill_mode) {
+void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMode fill_mode) {
     int ax = 17, ay =  4, az =  13;
     int bx = 55, by = 39, bz = 128;
     int cx = 23, cy = 59, cz = 255;
@@ -224,10 +244,10 @@ void render_demo(TGAImage& framebuffer, TGAImage& zbuffer, FillMode fill_mode) {
     triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
     triangle(115, 83, 80,  90, 85, 120, framebuffer, green);*/
 
-    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer, fill_mode, red, zbuffer);
+    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer, fill_mode, red, depthbuffer);
 }
 
-void render_model_painters(TGAImage& framebuffer, TGAImage& zbuffer, const std::string& model_path, FillMode fill_mode) {
+void render_model_painters(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
 
     std::vector<int> face_order(model.nfaces());
@@ -255,7 +275,7 @@ void render_model_painters(TGAImage& framebuffer, TGAImage& zbuffer, const std::
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
         triangle(ax, ay, az, bx, by, bz, cx, cy, cz,
-                 framebuffer, fill_mode, flat_color, zbuffer);
+                 framebuffer, fill_mode, flat_color, depthbuffer);
     }
 }
 
@@ -286,7 +306,7 @@ int main(int argc, char** argv) {
     log_openmp_status();
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
-    TGAImage     zbuffer(width, height, TGAImage::GRAYSCALE);
+    std::vector<double> depthbuffer(width * height, -std::numeric_limits<double>::infinity());
 
     FillMode fill_mode = FillMode::Flat;
     std::string mode;
@@ -314,15 +334,16 @@ int main(int argc, char** argv) {
 
     const auto render_start = std::chrono::steady_clock::now();
     if (mode == "--demo") {
-        render_demo(framebuffer, zbuffer, fill_mode);
+        render_demo(framebuffer, depthbuffer, fill_mode);
     } else {
-        render_model(framebuffer, zbuffer, mode, fill_mode);
+        render_model(framebuffer, depthbuffer, mode, fill_mode);
     }
     const auto render_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
     std::clog << "Render time: " << render_duration.count() << " ms\n";
 
     framebuffer.write_tga_file("framebuffer.tga");
+    TGAImage zbuffer = depthbuffer_to_image(depthbuffer);
     zbuffer.write_tga_file("zbuffer.tga");
     return 0;
 }
