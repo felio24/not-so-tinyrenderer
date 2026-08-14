@@ -172,8 +172,8 @@ void triangle(const int& ax, const int& ay, const int& az, const int& bx, const 
             if (u < 0 || v < 0 || w < 0) continue;
 
             unsigned char z = static_cast<unsigned char>(u * az + v * bz + w * cz); // Compute depth
-            zbuffer.set(i, j, {z}); // Update depth buffer
-
+            if (zbuffer.get(i, j).bgra[0] >= z) continue; // Only update depth buffer if current pixel is closer to camera than depth buffer
+            zbuffer.set(i, j, {z});
             if (fill_mode == FillMode::Flat) {
                 framebuffer.set(i, j, flat_color);
             } else if (fill_mode == FillMode::Intensity) {
