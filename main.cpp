@@ -227,24 +227,20 @@ void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const
 }
 
 void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMode fill_mode) {
-    int ax = 17, ay =  4, az =  13;
-    int bx = 55, by = 39, bz = 128;
-    int cx = 23, cy = 59, cz = 255;
-    
-    /*framebuffer.set(ax, ay, white);
-    framebuffer.set(bx, by, white);
-    framebuffer.set(cx, cy, white);
-    
-    line(ax, ay, bx, by, framebuffer, blue);
-    line(cx, cy, bx, by, framebuffer, green);
-    line(cx, cy, ax, ay, framebuffer, yellow);
-    line(ax, ay, cx, cy, framebuffer, red);
+    const int near_ax = 250, near_ay = 260;
+    const int near_bx = 720, near_by = 330;
+    const int near_cx = 430, near_cy = 740;
+    const double near_z = 0.6;
 
-    triangle(  7, 45, 35, 100, 45,  60, framebuffer, red);
-    triangle(120, 35, 90,   5, 45, 110, framebuffer, white);
-    triangle(115, 83, 80,  90, 85, 120, framebuffer, green);*/
+    const int far_ax = 180, far_ay = 160;
+    const int far_bx = 650, far_by = 220;
+    const int far_cx = 300, far_cy = 680;
+    const double far_z = -0.6;
 
-    triangle(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer, fill_mode, red, depthbuffer);
+    triangle(near_ax, near_ay, near_z, near_bx, near_by, near_z, near_cx, near_cy, near_z,
+             framebuffer, fill_mode, red, depthbuffer);
+    triangle(far_ax, far_ay, far_z, far_bx, far_by, far_z, far_cx, far_cy, far_z,
+             framebuffer, fill_mode, blue, depthbuffer);
 }
 
 void render_model_painters(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
