@@ -154,6 +154,20 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
+vec3 rot(vec3 v) {
+    constexpr double a = M_PI/6;
+    const vec3 Ry_x(std::cos(a), 0, std::sin(a));
+    const vec3 Ry_y(0,1,0);
+    const vec3 Ry_z(-std::sin(a), 0, std::cos(a));
+
+    return vec3(dot(Ry_x,v), dot(Ry_y,v), dot(Ry_z,v));
+}
+
+vec3 persp(vec3 v) {
+    constexpr double c = 3.;
+    return v / (1-v.z()/c);
+}
+
 std::tuple<int,int,double> project(vec3 v) {
     return { (v.x() + 1.) *  width/2,  // The input models are scaled to fit in [-1,1]^3, so shift x/y and scale them to screen space.
              (v.y() + 1.) * height/2,
@@ -168,10 +182,17 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
 void triangle(const int& ax, const int& ay, const double& az, const int& bx, const int& by, const double& bz, const int& cx, const int& cy, const double& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
     // Bounding box
     // Look for minimum and max vertex coordinates
-    const int min_x = std::min(std::min(ax, bx), cx);
-    const int max_x = std::max(std::max(ax, bx), cx);
-    const int min_y = std::min(std::min(ay, by), cy);
-    const int max_y = std::max(std::max(ay, by), cy);
+    const int raw_min_x = std::min(std::min(ax, bx), cx);
+    const int raw_max_x = std::max(std::max(ax, bx), cx);
+    const int raw_min_y = std::min(std::min(ay, by), cy);
+    const int raw_max_y = std::max(std::max(ay, by), cy);
+    if (raw_max_x < 0 || raw_min_x >= width || raw_max_y < 0 || raw_min_y >= height) return; // Completely out of space triangle
+    
+    // Partially outside ones are clamped
+    const int min_x = std::clamp(raw_min_x, 0, width - 1);
+    const int max_x = std::clamp(raw_max_x, 0, width - 1);
+    const int min_y = std::clamp(raw_min_y, 0, height - 1);
+    const int max_y = std::clamp(raw_max_y, 0, height - 1);
 
     const float total_area = triangle_area(ax, ay, bx, by, cx, cy);
     if (total_area < 1) return;
@@ -192,7 +213,7 @@ void triangle(const int& ax, const int& ay, const double& az, const int& bx, con
             const double z = u * az + v * bz + w * cz; // Compute depth
             const int depth_index = i + j * width;
             if (depthbuffer[depth_index] >= z) continue; // Larger z means closer to camera.
-
+            
             depthbuffer[depth_index] = z;
             if (fill_mode == FillMode::Flat) {
                 framebuffer.set(i, j, flat_color);
@@ -212,9 +233,9 @@ void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const
     Model model(model_path);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
-        auto [ax, ay, az] = project(model.vert(i, 0));
-        auto [bx, by, bz] = project(model.vert(i, 1));
-        auto [cx, cy, cz] = project(model.vert(i, 2));
+        auto [ax, ay, az] = project(persp(rot(model.vert(i, 0))));
+        auto [bx, by, bz] = project(persp(rot(model.vert(i, 1))));
+        auto [cx, cy, cz] = project(persp(rot(model.vert(i, 2))));
 
         unsigned char c[3];
         for (int j=0; j<3; j++) c[j] = std::rand()%255;
@@ -261,9 +282,9 @@ void render_model_painters(TGAImage& framebuffer, std::vector<double>& depthbuff
 
     std::srand(1234);
     for (int i : face_order) {
-        auto [ax, ay, az] = project(model.vert(i, 0));
-        auto [bx, by, bz] = project(model.vert(i, 1));
-        auto [cx, cy, cz] = project(model.vert(i, 2));
+        auto [ax, ay, az] = project(persp(rot(model.vert(i, 0))));
+        auto [bx, by, bz] = project(persp(rot(model.vert(i, 1))));
+        auto [cx, cy, cz] = project(persp(rot(model.vert(i, 2))));
 
         unsigned char c[3];
         for (int j=0; j<3; j++) c[j] = std::rand()%255;
