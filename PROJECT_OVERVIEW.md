@@ -202,6 +202,24 @@ Core concepts:
 - Model, View, Perspective, and Viewport transforms.
 - Homogeneous coordinates.
 
+Implementation note - TinyRenderer/OpenGL terminology:
+
+- OpenGL's `Model` matrix corresponds to TinyRenderer's `Model` transform, when present.
+- OpenGL's `View` matrix corresponds to TinyRenderer's `View` or `ModelView` transform, usually built from camera parameters such as `eye`, `center`, and `up`.
+- OpenGL's `Projection` matrix corresponds to TinyRenderer's `Perspective` transform.
+- OpenGL's `glViewport(...)` step corresponds to TinyRenderer's explicit `Viewport` matrix.
+- TinyRenderer's `Viewport` matrix is not the camera/view matrix. It maps projected normalized device coordinates, usually `[-1, 1]` in `x` and `y`, into final screen/window pixel coordinates.
+- Calls such as `viewport(width/16, height/16, width*7/8, height*7/8)` define an inset render rectangle: the origin is offset by one sixteenth of the framebuffer, and the viewport occupies seven eighths of its width and height.
+
+Implementation note - TinyRenderer/Ray Tracing in One Weekend camera comparison:
+
+- Ray Tracing in One Weekend does not use an MVP transform stack in the same way because it traces rays through pixels instead of rasterizing projected triangles.
+- `lookfrom` in Ray Tracing in One Weekend corresponds to TinyRenderer's `eye`: the camera position.
+- `lookat` in Ray Tracing in One Weekend corresponds to TinyRenderer's `center`: the world-space point the camera aims at.
+- `vup` in Ray Tracing in One Weekend corresponds to TinyRenderer's `up`: an approximate world-space up direction used to control camera roll.
+- TinyRenderer's `lookat(...)` is a function name for building the `ModelView`/view matrix from `eye`, `center`, and `up`; Ray Tracing in One Weekend's `lookat` is only the target point.
+- TinyRenderer transforms object/world-space vertices into camera space, then projects them to screen pixels. Ray Tracing in One Weekend builds a camera basis and viewport plane in world space, then fires one or more rays from the camera through each pixel.
+
 Tasks:
 
 - Add matrix types if your `vec3` helper is not enough.
