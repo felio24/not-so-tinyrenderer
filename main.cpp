@@ -55,7 +55,7 @@ TGAImage depthbuffer_to_image(const std::vector<double>& depthbuffer) {
             const double z = depthbuffer[x + y * width];
             if (z == -std::numeric_limits<double>::infinity()) continue;
 
-            const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
+            const double shade = std::clamp(z, 0.0, 255.0);
             const TGAColor color = {{static_cast<unsigned char>(shade), 0, 0, 0}, 1};
             zbuffer.set(x, y, color);
         }
@@ -171,7 +171,7 @@ vec3 persp(vec3 v) {
 std::tuple<int,int,double> project(vec3 v) {
     return { (v.x() + 1.) *  width/2,  // The input models are scaled to fit in [-1,1]^3, so shift x/y and scale them to screen space.
              (v.y() + 1.) * height/2,
-             v.z() };
+             (v.z() + 1.) * 255.0/2};
 }
 
 float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, const int& cx, const int& cy) {
