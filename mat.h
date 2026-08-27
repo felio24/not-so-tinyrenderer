@@ -39,6 +39,18 @@ class mat {
         return result;
     }
 
+    double determinant() const {
+        static_assert((rows == 2 && cols == 2) || (rows == 3 && cols == 3));
+
+        if constexpr (rows == 2 && cols == 2) {
+            return e[0][0] * e[1][1] - e[0][1] * e[1][0];
+        } else {
+            return e[0][0] * (e[1][1] * e[2][2] - e[1][2] * e[2][1])
+                 - e[0][1] * (e[1][0] * e[2][2] - e[1][2] * e[2][0])
+                 + e[0][2] * (e[1][0] * e[2][1] - e[1][1] * e[2][0]);
+        }
+    }
+
     double* operator[](int row) {
         assert(row >= 0 && row < rows);
         return e[row];
