@@ -2,6 +2,7 @@
 #define MAT_H
 
 #include <cassert>
+#include <initializer_list>
 #include <iostream>
 #include "vec3.h"
 
@@ -11,6 +12,22 @@ class mat {
     double e[rows][cols];
 
     mat() : e{} {}
+
+    mat(std::initializer_list<std::initializer_list<double>> values) : e{} {
+        assert(static_cast<int>(values.size()) == rows);
+
+        int row = 0;
+        for (const auto& source_row : values) {
+            assert(static_cast<int>(source_row.size()) == cols);
+
+            int col = 0;
+            for (double value : source_row) {
+                e[row][col] = value;
+                col++;
+            }
+            row++;
+        }
+    }
 
     static mat identity() {
         static_assert(rows == cols);
