@@ -220,6 +220,14 @@ Implementation note - TinyRenderer/Ray Tracing in One Weekend camera comparison:
 - TinyRenderer's `lookat(...)` is a function name for building the `ModelView`/view matrix from `eye`, `center`, and `up`; Ray Tracing in One Weekend's `lookat` is only the target point.
 - TinyRenderer transforms object/world-space vertices into camera space, then projects them to screen pixels. Ray Tracing in One Weekend builds a camera basis and viewport plane in world space, then fires one or more rays from the camera through each pixel.
 
+Implementation note - triangle area, determinants, and culling:
+
+- TinyRenderer's final camera code builds a 3x3 matrix from the projected screen-space triangle vertices and uses its determinant before rasterization.
+- That determinant is proportional to the signed 2D area of the projected triangle. Positive and negative signs indicate opposite vertex winding orders, while values near zero indicate degenerate or very small triangles.
+- The check `if (ABC.det() < 1) return;` combines back-face culling with skipping triangles that cover less than about a pixel.
+- This is closely related to this project's existing `triangle_area(...)` helper: the helper computes half of the same signed area represented by the determinant.
+- This means the existing `if (total_area < 1) return;` check already performs a similar screen-space winding and small-triangle rejection, so the determinant test does not need to be copied separately while the old triangle rasterizer is still being used.
+
 Tasks:
 
 - Add matrix types if your `vec3` helper is not enough.

@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <numeric>
@@ -9,6 +11,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include "mat.h"
 #include "model.h"
 #include "tgaimage.h"
 
@@ -22,6 +25,8 @@
 
 constexpr int width  = 800;
 constexpr int height = 800;
+
+mat4 ModelView, Viewport, Perspective;
 
 [[maybe_unused]] constexpr TGAColor white   = {{255, 255, 255, 255}, 4}; // attention, BGRA order
 [[maybe_unused]] constexpr TGAColor green   = {{  0, 255,   0, 255}, 4};
@@ -55,12 +60,31 @@ TGAImage depthbuffer_to_image(const std::vector<double>& depthbuffer) {
             const double z = depthbuffer[x + y * width];
             if (z == -std::numeric_limits<double>::infinity()) continue;
 
-            const double shade = std::clamp(z, 0.0, 255.0);
+            const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
             const TGAColor color = {{static_cast<unsigned char>(shade), 0, 0, 0}, 1};
             zbuffer.set(x, y, color);
         }
     }
     return zbuffer;
+}
+
+void write_depthbuffer_text(const std::vector<double>& depthbuffer, const std::string& path) {
+    std::ofstream out(path);
+    out << std::fixed << std::setprecision(6);
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            if (x > 0) out << ' ';
+
+            const double z = depthbuffer[x + y * width];
+            if (z == -std::numeric_limits<double>::infinity()) {
+                out << ".";
+            } else {
+                out << z;
+            }
+        }
+        out << '\n';
+    }
 }
 
 TGAColor barycentric_color(double u, double v, double w) {
@@ -82,6 +106,23 @@ TGAColor wireframe(double u, double v, double w) {
             static_cast<unsigned char>(w * 255),
             255}, 4};
 }
+
+void lookat(const vec3 eye, const vec3 center, const vec3 up) {
+    vec3 n = unit_vector(eye - center);
+    vec3 l = unit_vector(cross(up, n));
+    vec3 m = unit_vector(cross(n, l));
+    ModelView = mat4{{{l.x(),l.y(),l.z(),0}, {m.x(),m.y(),m.z(),0}, {n.x(),n.y(),n.z(),0}, {0,0,0,1}}} *
+                mat4{{{1,0,0,-center.x()}, {0,1,0,-center.y()}, {0,0,1,-center.z()}, {0,0,0,1}}};
+}
+
+void perspective(const double f) {
+    Perspective = {{{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0, -1/f,1}}};
+}
+
+void viewport(const int x, const int y, const int w, const int h) {
+    Viewport = {{{w/2., 0, 0, x+w/2.}, {0, h/2., 0, y+h/2.}, {0,0,1,0}, {0,0,0,1}}};
+}
+
 
 void lineShallow(int ax, int ay, int bx, int by, TGAImage& framebuffer, const TGAColor& color) {
     if (ax > bx) {
@@ -179,7 +220,7 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
     return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
 }
 
-void triangle(const int& ax, const int& ay, const double& az, const int& bx, const int& by, const double& bz, const int& cx, const int& cy, const double& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
+void triangle_screen(const int& ax, const int& ay, const double& az, const int& bx, const int& by, const double& bz, const int& cx, const int& cy, const double& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
     // Bounding box
     // Look for minimum and max vertex coordinates
     const int raw_min_x = std::min(std::min(ax, bx), cx);
@@ -229,21 +270,49 @@ void triangle(const int& ax, const int& ay, const double& az, const int& bx, con
     }
 }
 
+void triangle_clip(const vec4 clip[3], TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
+    vec4 ndc[3] = {
+        clip[0] / clip[0].w(),
+        clip[1] / clip[1].w(),
+        clip[2] / clip[2].w()
+    };
+    vec4 screen[3] = {
+        Viewport * ndc[0],
+        Viewport * ndc[1],
+        Viewport * ndc[2]
+    };
+
+    triangle_screen(static_cast<int>(std::round(screen[0].x())),
+                    static_cast<int>(std::round(screen[0].y())),
+                    screen[0].z(),
+                    static_cast<int>(std::round(screen[1].x())),
+                    static_cast<int>(std::round(screen[1].y())),
+                    screen[1].z(),
+                    static_cast<int>(std::round(screen[2].x())),
+                    static_cast<int>(std::round(screen[2].y())),
+                    screen[2].z(),
+                    framebuffer,
+                    fill_mode,
+                    flat_color,
+                    depthbuffer);
+}
+
 void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
-        auto [ax, ay, az] = project(persp(rot(model.vert(i, 0))));
-        auto [bx, by, bz] = project(persp(rot(model.vert(i, 1))));
-        auto [cx, cy, cz] = project(persp(rot(model.vert(i, 2))));
+        vec4 clip[3];
+        for (int d : {0,1,2}) {            // assemble the primitive
+            vec3 v = model.vert(i, d);
+            clip[d] = Perspective * ModelView * vec4{v.x(), v.y(), v.z(), 1.};
+        }
 
         unsigned char c[3];
         for (int j=0; j<3; j++) c[j] = std::rand()%255;
 
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
-        triangle(ax, ay, az, bx, by, bz, cx, cy, cz,
-                 framebuffer, fill_mode, flat_color, depthbuffer);
+        triangle_clip(clip, framebuffer, fill_mode, flat_color, depthbuffer);
     }
 }
 
@@ -258,10 +327,10 @@ void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMo
     const int far_cx = 300, far_cy = 680;
     const double far_z = -0.6;
 
-    triangle(near_ax, near_ay, near_z, near_bx, near_by, near_z, near_cx, near_cy, near_z,
-             framebuffer, fill_mode, red, depthbuffer);
-    triangle(far_ax, far_ay, far_z, far_bx, far_by, far_z, far_cx, far_cy, far_z,
-             framebuffer, fill_mode, blue, depthbuffer);
+    triangle_screen(near_ax, near_ay, near_z, near_bx, near_by, near_z, near_cx, near_cy, near_z,
+                    framebuffer, fill_mode, red, depthbuffer);
+    triangle_screen(far_ax, far_ay, far_z, far_bx, far_by, far_z, far_cx, far_cy, far_z,
+                    framebuffer, fill_mode, blue, depthbuffer);
 }
 
 void render_model_painters(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
@@ -291,8 +360,8 @@ void render_model_painters(TGAImage& framebuffer, std::vector<double>& depthbuff
 
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
-        triangle(ax, ay, az, bx, by, bz, cx, cy, cz,
-                 framebuffer, fill_mode, flat_color, depthbuffer);
+        triangle_screen(ax, ay, az, bx, by, bz, cx, cy, cz,
+                        framebuffer, fill_mode, flat_color, depthbuffer);
     }
 }
 
@@ -321,6 +390,14 @@ int main(int argc, char** argv) {
     }
 
     log_openmp_status();
+
+    const vec3    eye{-1,0,2}; // camera position
+    const vec3 center{0,0,0};  // camera direction
+    const vec3     up{0,1,0};  // camera up vector
+
+    lookat(eye, center, up);                              // build the ModelView   matrix
+    perspective((eye-center).length());                   // build the Perspective matrix
+    viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
     std::vector<double> depthbuffer(width * height, -std::numeric_limits<double>::infinity());
@@ -362,5 +439,6 @@ int main(int argc, char** argv) {
     framebuffer.write_tga_file("framebuffer.tga");
     TGAImage zbuffer = depthbuffer_to_image(depthbuffer);
     zbuffer.write_tga_file("zbuffer.tga");
+    write_depthbuffer_text(depthbuffer, "zbuffer.txt");
     return 0;
 }
