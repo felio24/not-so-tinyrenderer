@@ -195,26 +195,6 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
-vec3 rot(vec3 v) {
-    constexpr double a = M_PI/6;
-    const vec3 Ry_x(std::cos(a), 0, std::sin(a));
-    const vec3 Ry_y(0,1,0);
-    const vec3 Ry_z(-std::sin(a), 0, std::cos(a));
-
-    return vec3(dot(Ry_x,v), dot(Ry_y,v), dot(Ry_z,v));
-}
-
-vec3 persp(vec3 v) {
-    constexpr double c = 3.;
-    return v / (1-v.z()/c);
-}
-
-std::tuple<int,int,double> project(vec3 v) {
-    return { (v.x() + 1.) *  width/2,  // The input models are scaled to fit in [-1,1]^3, so shift x/y and scale them to screen space.
-             (v.y() + 1.) * height/2,
-             (v.z() + 1.) * 255.0/2};
-}
-
 float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, const int& cx, const int& cy) {
     // A = (ax(by - cy) + bx(cy - ay) + cx(ay - by)) / 2
     return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
@@ -331,38 +311,6 @@ void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMo
                     framebuffer, fill_mode, red, depthbuffer);
     triangle_screen(far_ax, far_ay, far_z, far_bx, far_by, far_z, far_cx, far_cy, far_z,
                     framebuffer, fill_mode, blue, depthbuffer);
-}
-
-void render_model_painters(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
-    Model model(model_path);
-
-    std::vector<int> face_order(model.nfaces());
-    std::iota(face_order.begin(), face_order.end(), 0);
-    std::sort(face_order.begin(), face_order.end(), [&](int a, int b) {
-        auto face_z = [&](int iface) {
-            vec3 v0 = model.vert(iface, 0);
-            vec3 v1 = model.vert(iface, 1);
-            vec3 v2 = model.vert(iface, 2);
-            return (v0.z() + v1.z() + v2.z()) / 3.0;
-        };
-
-        return face_z(a) > face_z(b); // largest z first
-    });
-
-    std::srand(1234);
-    for (int i : face_order) {
-        auto [ax, ay, az] = project(persp(rot(model.vert(i, 0))));
-        auto [bx, by, bz] = project(persp(rot(model.vert(i, 1))));
-        auto [cx, cy, cz] = project(persp(rot(model.vert(i, 2))));
-
-        unsigned char c[3];
-        for (int j=0; j<3; j++) c[j] = std::rand()%255;
-
-        TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
-        
-        triangle_screen(ax, ay, az, bx, by, bz, cx, cy, cz,
-                        framebuffer, fill_mode, flat_color, depthbuffer);
-    }
 }
 
 void log_openmp_status() {
