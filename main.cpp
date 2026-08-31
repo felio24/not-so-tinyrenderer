@@ -13,6 +13,7 @@
 #include <vector>
 #include "mat.h"
 #include "model.h"
+#include "notverygl.h"
 #include "tgaimage.h"
 
 #ifndef RASTERIZER_PARALLEL
@@ -26,7 +27,28 @@
 constexpr int width  = 800;
 constexpr int height = 800;
 
-mat4 ModelView, Viewport, Perspective;
+extern mat4 ModelView, Perspective; // "OpenGL" state matrices and
+extern std::vector<double> zbuffer; // the depth buffer
+
+struct RandomShader : IShader {
+    const Model &model;
+    TGAColor color = {};
+    vec3 tri[3];  // triangle in eye coordinates
+
+    RandomShader(const Model &m) : model(m) {
+    }
+
+    virtual vec4 vertex(const int face, const int vert) {
+        vec3 v = model.vert(face, vert);                          // current vertex in object coordinates
+        vec4 gl_Position = ModelView * vec4{v.x(), v.y(), v.z(), 1.};
+        tri[vert] = gl_Position.xyz();                            // in eye coordinates
+        return Perspective * gl_Position;                         // in clip coordinates
+    }
+
+    virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
+        return {false, color};                                    // do not discard the pixel
+    }
+};
 
 [[maybe_unused]] constexpr TGAColor white   = {{255, 255, 255, 255}, 4}; // attention, BGRA order
 [[maybe_unused]] constexpr TGAColor green   = {{  0, 255,   0, 255}, 4};
@@ -34,12 +56,7 @@ mat4 ModelView, Viewport, Perspective;
 [[maybe_unused]] constexpr TGAColor blue    = {{255, 128,  64, 255}, 4};
 [[maybe_unused]] constexpr TGAColor yellow  = {{  0, 200, 255, 255}, 4};
 
-enum class FillMode {
-    Flat,
-    Intensity,
-    Barycentric,
-    Wireframe
-};
+// FillMode enum moved to notverygl.h
 
 std::optional<FillMode> parse_fill_mode(const std::string& mode) {
     if (mode == "flat") return FillMode::Flat;
@@ -105,22 +122,6 @@ TGAColor wireframe(double u, double v, double w) {
             static_cast<unsigned char>(v * 255),
             static_cast<unsigned char>(w * 255),
             255}, 4};
-}
-
-void lookat(const vec3 eye, const vec3 center, const vec3 up) {
-    vec3 n = unit_vector(eye - center);
-    vec3 l = unit_vector(cross(up, n));
-    vec3 m = unit_vector(cross(n, l));
-    ModelView = mat4{{{l.x(),l.y(),l.z(),0}, {m.x(),m.y(),m.z(),0}, {n.x(),n.y(),n.z(),0}, {0,0,0,1}}} *
-                mat4{{{1,0,0,-center.x()}, {0,1,0,-center.y()}, {0,0,1,-center.z()}, {0,0,0,1}}};
-}
-
-void perspective(const double f) {
-    Perspective = {{{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0, -1/f,1}}};
-}
-
-void viewport(const int x, const int y, const int w, const int h) {
-    Viewport = {{{w/2., 0, 0, x+w/2.}, {0, h/2., 0, y+h/2.}, {0,0,1,0}, {0,0,0,1}}};
 }
 
 
@@ -195,11 +196,7 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
-float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, const int& cx, const int& cy) {
-    // A = (ax(by - cy) + bx(cy - ay) + cx(ay - by)) / 2
-    return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-}
-
+/*
 void triangle_screen(const int& ax, const int& ay, const double& az, const int& bx, const int& by, const double& bz, const int& cx, const int& cy, const double& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
     // Bounding box
     // Look for minimum and max vertex coordinates
@@ -276,9 +273,10 @@ void triangle_clip(const vec4 clip[3], TGAImage& framebuffer, FillMode fill_mode
                     flat_color,
                     depthbuffer);
 }
-
+*/
 void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
+    RandomShader shader(model);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
         vec4 clip[3];
@@ -292,10 +290,11 @@ void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const
 
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
-        triangle_clip(clip, framebuffer, fill_mode, flat_color, depthbuffer);
+        rasterize(clip, shader, framebuffer, fill_mode, flat_color);
+        //triangle_clip(clip, framebuffer, fill_mode, flat_color, depthbuffer);
     }
 }
-
+/*
 void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMode fill_mode) {
     const int near_ax = 250, near_ay = 260;
     const int near_bx = 720, near_by = 330;
@@ -312,7 +311,7 @@ void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMo
     triangle_screen(far_ax, far_ay, far_z, far_bx, far_by, far_z, far_cx, far_cy, far_z,
                     framebuffer, fill_mode, blue, depthbuffer);
 }
-
+*/
 void log_openmp_status() {
 #if RASTERIZER_PARALLEL
 #ifdef _OPENMP
@@ -343,9 +342,10 @@ int main(int argc, char** argv) {
     const vec3 center{0,0,0};  // camera direction
     const vec3     up{0,1,0};  // camera up vector
 
-    lookat(eye, center, up);                              // build the ModelView   matrix
-    perspective((eye-center).length());                   // build the Perspective matrix
-    viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
+    lookat(eye, center, up);                                   // build the ModelView   matrix
+    init_perspective((eye-center).length());                   // build the Perspective matrix
+    init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
+    init_zbuffer(width, height);
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
     std::vector<double> depthbuffer(width * height, -std::numeric_limits<double>::infinity());
@@ -376,7 +376,7 @@ int main(int argc, char** argv) {
 
     const auto render_start = std::chrono::steady_clock::now();
     if (mode == "--demo") {
-        render_demo(framebuffer, depthbuffer, fill_mode);
+        //render_demo(framebuffer, depthbuffer, fill_mode);
     } else {
         render_model(framebuffer, depthbuffer, mode, fill_mode);
     }

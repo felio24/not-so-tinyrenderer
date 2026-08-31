@@ -34,7 +34,7 @@ endif()
 
 find_package(OpenMP COMPONENTS CXX)
 
-set(SOURCES main.cpp tgaimage.cpp model.cpp)
+set(SOURCES main.cpp tgaimage.cpp model.cpp notverygl.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_compile_definitions(${PROJECT_NAME} PRIVATE RASTERIZER_PARALLEL=${RASTERIZER_PARALLEL})
