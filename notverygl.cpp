@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <limits>
 #include "notverygl.h"
 
 mat4 ModelView, Viewport, Perspective;
@@ -21,21 +22,7 @@ void init_viewport(const int& x, const int& y, const int& w, const int& h) {
 }
 
 void init_zbuffer(const int& width, const int& height) {
-    zbuffer = std::vector(width*height, -1000.);
-}
-
-float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, const int& cx, const int& cy) {
-    /*
-    const int ax = static_cast<int>(screen[0].x());
-    const int ay = static_cast<int>(screen[0].y());
-    const int bx = static_cast<int>(screen[1].x());
-    const int by = static_cast<int>(screen[1].y());
-    const int cx = static_cast<int>(screen[2].x());
-    const int cy = static_cast<int>(screen[2].y());
-    */
-    
-    // A = (ax(by - cy) + bx(cy - ay) + cx(ay - by)) / 2
-    return 0.5 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    zbuffer = std::vector(width*height, -std::numeric_limits<double>::infinity());
 }
 
 void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer, FillMode fill_mode, const TGAColor &flat_color) {

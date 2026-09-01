@@ -50,6 +50,12 @@ struct RandomShader : IShader {
     }
 };
 
+struct DemoShader : IShader {
+    virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
+        return {false, {{255, 255, 255, 255}, 4}};                // do not discard the pixel
+    }
+};
+
 [[maybe_unused]] constexpr TGAColor white   = {{255, 255, 255, 255}, 4}; // attention, BGRA order
 [[maybe_unused]] constexpr TGAColor green   = {{  0, 255,   0, 255}, 4};
 [[maybe_unused]] constexpr TGAColor red     = {{  0,   0, 255, 255}, 4};
@@ -274,7 +280,7 @@ void triangle_clip(const vec4 clip[3], TGAImage& framebuffer, FillMode fill_mode
                     depthbuffer);
 }
 */
-void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const std::string& model_path, FillMode fill_mode) {
+void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
     RandomShader shader(model);
     std::srand(1234);
@@ -291,7 +297,6 @@ void render_model(TGAImage& framebuffer, std::vector<double>& depthbuffer, const
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         
         rasterize(clip, shader, framebuffer, fill_mode, flat_color);
-        //triangle_clip(clip, framebuffer, fill_mode, flat_color, depthbuffer);
     }
 }
 /*
@@ -312,6 +317,25 @@ void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMo
                     framebuffer, fill_mode, blue, depthbuffer);
 }
 */
+
+void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
+    DemoShader shader;
+
+    Triangle far = {
+        vec4{-0.63, -0.69, -0.6, 1.0},
+        vec4{ 0.71, -0.51, -0.6, 1.0},
+        vec4{-0.29,  0.80, -0.6, 1.0},
+    };
+    Triangle near = {
+        vec4{-0.43, -0.40, 0.6, 1.0},
+        vec4{ 0.91, -0.20, 0.6, 1.0},
+        vec4{ 0.09,  0.97, 0.6, 1.0},
+    };
+
+    rasterize(far, shader, framebuffer, fill_mode, blue);
+    rasterize(near, shader, framebuffer, fill_mode, red);
+}
+
 void log_openmp_status() {
 #if RASTERIZER_PARALLEL
 #ifdef _OPENMP
@@ -348,7 +372,6 @@ int main(int argc, char** argv) {
     init_zbuffer(width, height);
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
-    std::vector<double> depthbuffer(width * height, -std::numeric_limits<double>::infinity());
 
     FillMode fill_mode = FillMode::Flat;
     std::string mode;
@@ -376,17 +399,17 @@ int main(int argc, char** argv) {
 
     const auto render_start = std::chrono::steady_clock::now();
     if (mode == "--demo") {
-        //render_demo(framebuffer, depthbuffer, fill_mode);
+        render_demo(framebuffer, fill_mode);
     } else {
-        render_model(framebuffer, depthbuffer, mode, fill_mode);
+        render_model(framebuffer, mode, fill_mode);
     }
     const auto render_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
     std::clog << "Render time: " << render_duration.count() << " ms\n";
 
     framebuffer.write_tga_file("framebuffer.tga");
-    TGAImage zbuffer = depthbuffer_to_image(depthbuffer);
-    zbuffer.write_tga_file("zbuffer.tga");
-    write_depthbuffer_text(depthbuffer, "zbuffer.txt");
+    TGAImage zbuffer_image = depthbuffer_to_image(zbuffer);
+    zbuffer_image.write_tga_file("zbuffer.tga");
+    write_depthbuffer_text(zbuffer, "zbuffer.txt");
     return 0;
 }
