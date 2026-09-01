@@ -220,13 +220,22 @@ Implementation note - TinyRenderer/Ray Tracing in One Weekend camera comparison:
 - TinyRenderer's `lookat(...)` is a function name for building the `ModelView`/view matrix from `eye`, `center`, and `up`; Ray Tracing in One Weekend's `lookat` is only the target point.
 - TinyRenderer transforms object/world-space vertices into camera space, then projects them to screen pixels. Ray Tracing in One Weekend builds a camera basis and viewport plane in world space, then fires one or more rays from the camera through each pixel.
 
-Implementation note - triangle area, determinants, and culling:
+Implementation note - rasterization matrix math:
 
-- TinyRenderer's final camera code builds a 3x3 matrix from the projected screen-space triangle vertices and uses its determinant before rasterization.
-- That determinant is proportional to the signed 2D area of the projected triangle. Positive and negative signs indicate opposite vertex winding orders, while values near zero indicate degenerate or very small triangles.
-- The check `if (ABC.det() < 1) return;` combines back-face culling with skipping triangles that cover less than about a pixel.
-- This is closely related to this project's existing `triangle_area(...)` helper: the helper computes half of the same signed area represented by the determinant.
-- This means the existing `if (total_area < 1) return;` check already performs a similar screen-space winding and small-triangle rejection, so the determinant test does not need to be copied separately while the old triangle rasterizer is still being used.
+- TinyRenderer's final camera code builds a 3x3 matrix from the projected screen-space triangle vertices:
+
+  ```text
+  ABC = [ Ax Ay 1 ]
+        [ Bx By 1 ]
+        [ Cx Cy 1 ]
+  ```
+
+- `ABC.det()` is the shoelace formula for the signed projected triangle area, but without the final division by two. In other words, `ABC.det()` is twice this project's `triangle_area(A, B, C)` result.
+- The division by two does not matter when all barycentric coordinates are computed as determinant ratios, because the same factor appears in the numerator and denominator and cancels out. It does matter if one side of the ratio uses `triangle_area(...)` and the other side uses `ABC.det()`.
+- The check `if (ABC.det() < 1) return;` combines screen-space back-face culling with skipping degenerate or sub-pixel triangles.
+- The rasterizer builds `ABC` from screen coordinates because the per-pixel loop asks whether framebuffer pixel `(x, y)` lies inside the projected triangle.
+- Depth can still be interpolated from NDC `z` values. The screen-space barycentric weights are valid for this because the viewport transform from NDC `x,y` to screen `x,y` is affine, so it preserves barycentric coordinates.
+- Keep each candidate pixel internally consistent: use either the old area-based barycentric coordinates for the inside test, depth interpolation, and coloring, or use the matrix-solved barycentric coordinates for all three. Mixing them can cause visible differences because the area helper currently truncates floating-point screen vertices to integers, while the matrix path keeps the precise projected coordinates.
 
 Tasks:
 

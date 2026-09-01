@@ -39,6 +39,8 @@ float triangle_area(const int& ax, const int& ay, const int& bx, const int& by, 
 }
 
 void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer, FillMode fill_mode, const TGAColor &flat_color) {
+    // NDC x,y:    [-1, 1]
+    // screen x,y: [viewport pixel bounds]
     vec4 ndc[3] = {
         clip[0] / clip[0].w(),
         clip[1] / clip[1].w(),
@@ -50,12 +52,13 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
         Viewport * ndc[2]
     };
 
+    // ABC is for answering: is this framebuffer pixel inside the triangle, and what are its barycentric weights in raster space?
     mat3 ABC = {{ {screen[0].x(), screen[0].y(), 1.}, 
                   {screen[1].x(), screen[1].y(), 1.}, 
                   {screen[2].x(), screen[2].y(), 1.} }};
 
-    const float total_area = triangle_area(screen[0].x(),screen[0].y(), screen[1].x(), screen[1].y(), screen[2].x(), screen[2].y());
-    if (total_area < 1) return;
+    // ABC determinant is equivalent to shoelace formula * 2
+    if (ABC.determinant() < 1) return;
 
     // Bounding box
     // Look for minimum and max vertex coordinates
@@ -67,15 +70,16 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
 #endif
     for (int i = std::max<int>(bbminx, 0); i <= std::min<int>(bbmaxx, framebuffer.width()-1); i++) {
         for (int j = std::max<int>(bbminy, 0); j <= std::min<int>(bbmaxy, framebuffer.height()-1); j++) {
-            // Calculate the barycentric coordinate
-            // P = uA + vB + wC
-            const double u = triangle_area(i, j, screen[1].x(), screen[1].y(), screen[2].x(), screen[2].y()) / total_area;
-            const double v = triangle_area(i, j, screen[2].x(), screen[2].y(), screen[0].x(), screen[0].y()) / total_area;
-            const double w = triangle_area(i, j, screen[0].x(), screen[0].y(), screen[1].x(), screen[1].y()) / total_area;
+            // Calculate the barycentric coordinate, P = uA + vB + wC
+            // Previously u, v and w were obtained by dividing area of sub-triangles over the entire triangle's
+            // With matrix ABC, we can simply solve for u, v and w
+            // [Ax Bx Cx] [u]   [x]
+            // [Ay By Cy] [v] = [y]
+            // [ 1  1  1] [w]   [1]
+            vec3 uvw = ABC.transpose().inverse() * vec3(i,j,1);
+            if (uvw.x() < 0 || uvw.y() < 0 || uvw.z() < 0) continue;
 
-            if (u < 0 || v < 0 || w < 0) continue;
-
-            const double z = u * screen[0].z() + v * screen[1].z() + w * screen[2].z(); // Compute depth
+            const double z = dot(uvw, vec3(ndc[0].z(), ndc[1].z(), ndc[2].z())); // Compute depth
             const int depth_index = i + j * framebuffer.width();
             if (zbuffer[depth_index] >= z) continue; // Larger z means closer to camera.
             
@@ -86,9 +90,9 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
                 const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
                 framebuffer.set(i, j, grayscale(static_cast<unsigned char>(shade)));
             } else if (fill_mode == FillMode::Barycentric) {
-                framebuffer.set(i, j, barycentric_color(u, v, w));
+                framebuffer.set(i, j, barycentric_color(uvw.x(), uvw.y(), uvw.z()));
             } else {
-                framebuffer.set(i, j, wireframe(u, v, w));
+                framebuffer.set(i, j, wireframe(uvw.x(), uvw.y(), uvw.z()));
             }
         }
     }
