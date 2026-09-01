@@ -202,93 +202,15 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
-/*
-void triangle_screen(const int& ax, const int& ay, const double& az, const int& bx, const int& by, const double& bz, const int& cx, const int& cy, const double& cz, TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
-    // Bounding box
-    // Look for minimum and max vertex coordinates
-    const int raw_min_x = std::min(std::min(ax, bx), cx);
-    const int raw_max_x = std::max(std::max(ax, bx), cx);
-    const int raw_min_y = std::min(std::min(ay, by), cy);
-    const int raw_max_y = std::max(std::max(ay, by), cy);
-    if (raw_max_x < 0 || raw_min_x >= width || raw_max_y < 0 || raw_min_y >= height) return; // Completely out of space triangle
-    
-    // Partially outside ones are clamped
-    const int min_x = std::clamp(raw_min_x, 0, width - 1);
-    const int max_x = std::clamp(raw_max_x, 0, width - 1);
-    const int min_y = std::clamp(raw_min_y, 0, height - 1);
-    const int max_y = std::clamp(raw_max_y, 0, height - 1);
-
-    const float total_area = triangle_area(ax, ay, bx, by, cx, cy);
-    if (total_area < 1) return;
-
-#if RASTERIZER_PARALLEL && defined(_OPENMP)
-#pragma omp parallel for
-#endif
-    for (int i = min_x; i <= max_x; i++) {
-        for (int j = min_y; j <= max_y; j++) {
-            // Calculate the barycentric coordinate
-            // P = uA + vB + wC
-            const double u = triangle_area(i, j, bx, by, cx, cy) / total_area;
-            const double v = triangle_area(i, j, cx, cy, ax, ay) / total_area;
-            const double w = triangle_area(i, j, ax, ay, bx, by) / total_area;
-
-            if (u < 0 || v < 0 || w < 0) continue;
-
-            const double z = u * az + v * bz + w * cz; // Compute depth
-            const int depth_index = i + j * width;
-            if (depthbuffer[depth_index] >= z) continue; // Larger z means closer to camera.
-            
-            depthbuffer[depth_index] = z;
-            if (fill_mode == FillMode::Flat) {
-                framebuffer.set(i, j, flat_color);
-            } else if (fill_mode == FillMode::Intensity) {
-                const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
-                framebuffer.set(i, j, grayscale(static_cast<unsigned char>(shade)));
-            } else if (fill_mode == FillMode::Barycentric) {
-                framebuffer.set(i, j, barycentric_color(u, v, w));
-            } else {
-                framebuffer.set(i, j, wireframe(u, v, w));
-            }
-        }
-    }
-}
-
-void triangle_clip(const vec4 clip[3], TGAImage& framebuffer, FillMode fill_mode, TGAColor flat_color, std::vector<double>& depthbuffer) {
-    vec4 ndc[3] = {
-        clip[0] / clip[0].w(),
-        clip[1] / clip[1].w(),
-        clip[2] / clip[2].w()
-    };
-    vec4 screen[3] = {
-        Viewport * ndc[0],
-        Viewport * ndc[1],
-        Viewport * ndc[2]
-    };
-
-    triangle_screen(static_cast<int>(std::round(screen[0].x())),
-                    static_cast<int>(std::round(screen[0].y())),
-                    screen[0].z(),
-                    static_cast<int>(std::round(screen[1].x())),
-                    static_cast<int>(std::round(screen[1].y())),
-                    screen[1].z(),
-                    static_cast<int>(std::round(screen[2].x())),
-                    static_cast<int>(std::round(screen[2].y())),
-                    screen[2].z(),
-                    framebuffer,
-                    fill_mode,
-                    flat_color,
-                    depthbuffer);
-}
-*/
 void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
     Model model(model_path);
     RandomShader shader(model);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
         vec4 clip[3];
-        for (int d : {0,1,2}) {            // assemble the primitive
-            vec3 v = model.vert(i, d);
-            clip[d] = Perspective * ModelView * vec4{v.x(), v.y(), v.z(), 1.};
+        for (int d : {0,1,2}) {  
+            // assemble the primitive
+            clip[d] = shader.vertex(i, d);
         }
 
         unsigned char c[3];
@@ -299,24 +221,6 @@ void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode
         rasterize(clip, shader, framebuffer, fill_mode, flat_color);
     }
 }
-/*
-void render_demo(TGAImage& framebuffer, std::vector<double>& depthbuffer, FillMode fill_mode) {
-    const int near_ax = 250, near_ay = 260;
-    const int near_bx = 720, near_by = 330;
-    const int near_cx = 430, near_cy = 740;
-    const double near_z = 0.6;
-
-    const int far_ax = 180, far_ay = 160;
-    const int far_bx = 650, far_by = 220;
-    const int far_cx = 300, far_cy = 680;
-    const double far_z = -0.6;
-
-    triangle_screen(near_ax, near_ay, near_z, near_bx, near_by, near_z, near_cx, near_cy, near_z,
-                    framebuffer, fill_mode, red, depthbuffer);
-    triangle_screen(far_ax, far_ay, far_z, far_bx, far_by, far_z, far_cx, far_cy, far_z,
-                    framebuffer, fill_mode, blue, depthbuffer);
-}
-*/
 
 void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
     DemoShader shader;

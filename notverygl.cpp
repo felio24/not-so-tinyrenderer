@@ -70,6 +70,9 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
             const int depth_index = i + j * framebuffer.width();
             if (zbuffer[depth_index] >= z) continue; // Larger z means closer to camera.
             
+            auto [discard, color] = shader.fragment(uvw);
+            if (discard) continue;                                 // fragment shader can discard current fragment
+
             zbuffer[depth_index] = z;
             if (fill_mode == FillMode::Flat) {
                 framebuffer.set(i, j, flat_color);
