@@ -51,6 +51,42 @@ class mat {
         }
     }
 
+    mat<cols, rows> transpose() const {
+        mat<cols, rows> result;
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                result[col][row] = e[row][col];
+            }
+        }
+        return result;
+    }
+
+    mat inverse() const {
+        static_assert((rows == 2 && cols == 2) || (rows == 3 && cols == 3));
+
+        const double det = determinant();
+        assert(det != 0);
+
+        if constexpr (rows == 2 && cols == 2) {
+            return mat{{
+                { e[1][1] / det, -e[0][1] / det },
+                { -e[1][0] / det, e[0][0] / det },
+            }};
+        } else {
+            return mat{{
+                { (e[1][1] * e[2][2] - e[1][2] * e[2][1]) / det,
+                  (e[0][2] * e[2][1] - e[0][1] * e[2][2]) / det,
+                  (e[0][1] * e[1][2] - e[0][2] * e[1][1]) / det },
+                { (e[1][2] * e[2][0] - e[1][0] * e[2][2]) / det,
+                  (e[0][0] * e[2][2] - e[0][2] * e[2][0]) / det,
+                  (e[0][2] * e[1][0] - e[0][0] * e[1][2]) / det },
+                { (e[1][0] * e[2][1] - e[1][1] * e[2][0]) / det,
+                  (e[0][1] * e[2][0] - e[0][0] * e[2][1]) / det,
+                  (e[0][0] * e[1][1] - e[0][1] * e[1][0]) / det },
+            }};
+        }
+    }
+
     double* operator[](int row) {
         assert(row >= 0 && row < rows);
         return e[row];
