@@ -1,5 +1,7 @@
 *.tga
 PROJECT_OVERVIEW.md
+FLASHCARD_CONCEPTS.md
+AGENTS.md
 
 # macOS
 .DS_Store
