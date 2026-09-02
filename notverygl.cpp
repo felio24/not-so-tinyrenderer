@@ -75,7 +75,7 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
 
             zbuffer[depth_index] = z;
             if (fill_mode == FillMode::Flat) {
-                framebuffer.set(i, j, flat_color);
+                framebuffer.set(i, j, color);
             } else if (fill_mode == FillMode::Intensity) {
                 const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
                 framebuffer.set(i, j, grayscale(static_cast<unsigned char>(shade)));

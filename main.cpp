@@ -31,12 +31,11 @@ extern mat4 ModelView, Perspective; // "OpenGL" state matrices and
 extern std::vector<double> zbuffer; // the depth buffer
 
 struct RandomShader : IShader {
-    const Model &model;
+    const Model& model;
     TGAColor color = {};
     vec3 tri[3];  // triangle in eye coordinates
 
-    RandomShader(const Model &m) : model(m) {
-    }
+    RandomShader(const Model& m) : model(m) {}
 
     virtual vec4 vertex(const int face, const int vert) {
         vec3 v = model.vert(face, vert);                          // current vertex in object coordinates
@@ -50,9 +49,56 @@ struct RandomShader : IShader {
     }
 };
 
-struct DemoShader : IShader {
+struct SolidShader : IShader {
+    TGAColor color;
+
+    SolidShader(const TGAColor& c) : color(c) {}
+
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
-        return {false, {{255, 255, 255, 255}, 4}};                // do not discard the pixel
+        return {false, color};                                    // do not discard the pixel
+    }
+};
+
+struct DiffuseShader : IShader {
+    const Model& model;
+    TGAColor color = {};
+    vec3 tri[3]; // triangle in eye coordinates
+    vec3 light;  // position of light source
+
+    vec3 normal;
+    double ambient_strength = 0.2;
+    double diffuse_strength = 0.6;
+
+    DiffuseShader(const Model& m, const double& ambient, const vec3& light) :
+        model(m),
+        light(light),
+        ambient_strength(ambient)
+    {
+        diffuse_strength = 1-ambient_strength;
+    }
+
+    virtual vec4 vertex(const int face, const int vert) {
+        vec3 v = model.vert(face, vert);                               // current vertex in object coordinates
+        vec4 gl_Position = ModelView * vec4{v.x(), v.y(), v.z(), 1.};
+
+        tri[vert] = gl_Position.xyz();                                 // in eye coordinates
+        if (vert == 2) {
+            normal = unit_vector(cross(tri[1]-tri[0], tri[2]-tri[0])); // direction depends on vertex winding and cross-product order
+        }
+
+        return Perspective * gl_Position;                              // in clip coordinates
+    }
+
+    virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
+        vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z(); // bar is uvw which are the barycentric coordinates, not {x, y, z} in model/world/eye space
+        const vec3 l = unit_vector(light-p);                             // so l differs for each point in the face?
+        const double diffuse = std::max(0., dot(normal,l));
+
+        // weighted sum
+        double total = ambient_strength + diffuse_strength * diffuse;
+        total = std::clamp(total, 0.0, 1.0);
+        uint8_t intensity = static_cast<uint8_t>(total * 255);
+        return {false, {{intensity, intensity, intensity, 255}, 4}};     // do not discard the pixel
     }
 };
 
@@ -203,8 +249,9 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
 }
 
 void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
+    const vec3 light{3,2,3};
     Model model(model_path);
-    RandomShader shader(model);
+    DiffuseShader shader(model, 0.34, light);
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
         vec4 clip[3];
@@ -223,8 +270,6 @@ void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode
 }
 
 void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
-    DemoShader shader;
-
     Triangle far = {
         vec4{-0.63, -0.69, -0.6, 1.0},
         vec4{ 0.71, -0.51, -0.6, 1.0},
@@ -236,8 +281,10 @@ void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
         vec4{ 0.09,  0.97, 0.6, 1.0},
     };
 
-    rasterize(far, shader, framebuffer, fill_mode, blue);
-    rasterize(near, shader, framebuffer, fill_mode, red);
+    SolidShader far_shader(blue);
+    SolidShader near_shader(red);
+    rasterize(far, far_shader, framebuffer, fill_mode, blue);
+    rasterize(near, near_shader, framebuffer, fill_mode, red);
 }
 
 void log_openmp_status() {
