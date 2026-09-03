@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --shader)
             if [[ $# -lt 2 ]]; then
-                echo "--shader expects random or diffuse" >&2
+                echo "--shader expects random, diffuse, phong, or blinnphong" >&2
                 exit 1
             fi
             shader_mode="$2"
@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: ./run.sh [--serial|--parallel] [--shader random|diffuse] [--fill shaded|flat|intensity|barycentric|wireframe] [--output framebuffer.tga] [--demo|path/to/model.obj]"
+            echo "Usage: ./run.sh [--serial|--parallel] [--shader random|diffuse|phong|blinnphong] [--fill shaded|flat|intensity|barycentric|wireframe] [--output framebuffer.tga] [--demo|path/to/model.obj]"
             echo
             echo "Defaults:"
             echo "  mode:  --serial"

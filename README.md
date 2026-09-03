@@ -78,10 +78,14 @@ The model render can switch shaders without editing the source:
 
 - `random`: one random color per triangle.
 - `diffuse`: ambient plus Lambert diffuse lighting.
+- `phong`: ambient, Lambert diffuse, and reflection-vector specular lighting.
+- `blinnphong`: ambient, Lambert diffuse, and half-vector specular lighting.
 
 ```bash
 ./run.sh --shader random
 ./run.sh --shader diffuse
+./run.sh --shader phong
+./run.sh --shader blinnphong
 ```
 
 For quick visual comparisons, run the same model with different `--shader` and `--output` values.
