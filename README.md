@@ -32,6 +32,8 @@ The easiest entry point is `run.sh`. It configures CMake, builds the project, th
 Defaults:
 
 - Rasterization mode: serial.
+- Shader: `diffuse`.
+- Fill mode: `shaded`.
 - Model: `obj/diablo3_pose/diablo3_pose.obj`.
 - Output image: `framebuffer.tga`.
 
@@ -40,6 +42,10 @@ Useful variants:
 ```bash
 ./run.sh --demo
 ./run.sh obj/african_head/african_head.obj
+./run.sh --shader random obj/african_head/african_head.obj
+./run.sh --shader diffuse obj/african_head/african_head.obj
+./run.sh --shader random --output random.tga obj/african_head/african_head.obj
+./run.sh --shader diffuse --output diffuse.tga obj/african_head/african_head.obj
 ./run.sh --fill intensity --demo
 ./run.sh --fill barycentric obj/diablo3_pose/diablo3_pose.obj
 ./run.sh --parallel obj/diablo3_pose/diablo3_pose.obj
@@ -66,16 +72,32 @@ Use `RASTERIZER_PARALLEL=0` to return to the serial baseline.
 
 On macOS, OpenMP uses CPU threads through Homebrew `libomp`; it does not use the GPU.
 
+## Shader Modes
+
+The model render can switch shaders without editing the source:
+
+- `random`: one random color per triangle.
+- `diffuse`: ambient plus Lambert diffuse lighting.
+
+```bash
+./run.sh --shader random
+./run.sh --shader diffuse
+```
+
+For quick visual comparisons, run the same model with different `--shader` and `--output` values.
+
 ## Fill Modes
 
 Triangle coloring can be switched without changing the rasterizer code:
 
+- `shaded`: use the selected shader's fragment color.
 - `flat`: one random color per triangle.
 - `intensity`: interpolate a scalar value across the triangle and display it as grayscale.
 - `barycentric`: show barycentric coordinates as RGB-style channel gradients. The storage order is BGRA, so the helper handles the channel packing.
 - `wireframe`: show triangle edges using the barycentric coordinates.
 
 ```bash
+./run.sh --fill shaded
 ./run.sh --fill flat
 ./run.sh --fill intensity
 ./run.sh --fill barycentric

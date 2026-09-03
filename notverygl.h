@@ -3,6 +3,7 @@
 #include "mat.h"
 // Fill modes for triangle rasterization
 enum class FillMode {
+    Shaded,
     Flat,
     Intensity,
     Barycentric,

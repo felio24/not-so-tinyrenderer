@@ -3,8 +3,10 @@
 set -e
 
 parallel=0
-fill_mode="flat"
+fill_mode="shaded"
+shader_mode="diffuse"
 model_path="obj/diablo3_pose/diablo3_pose.obj"
+output_path="framebuffer.tga"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -22,19 +24,37 @@ while [[ $# -gt 0 ]]; do
             ;;
         --fill)
             if [[ $# -lt 2 ]]; then
-                echo "--fill expects flat, intensity, or barycentric" >&2
+                echo "--fill expects shaded, flat, intensity, barycentric, or wireframe" >&2
                 exit 1
             fi
             fill_mode="$2"
             shift 2
             ;;
+        --shader)
+            if [[ $# -lt 2 ]]; then
+                echo "--shader expects random or diffuse" >&2
+                exit 1
+            fi
+            shader_mode="$2"
+            shift 2
+            ;;
+        --output)
+            if [[ $# -lt 2 ]]; then
+                echo "--output expects a .tga path" >&2
+                exit 1
+            fi
+            output_path="$2"
+            shift 2
+            ;;
         -h|--help)
-            echo "Usage: ./run.sh [--serial|--parallel] [--fill flat|intensity|barycentric] [--demo|path/to/model.obj]"
+            echo "Usage: ./run.sh [--serial|--parallel] [--shader random|diffuse] [--fill shaded|flat|intensity|barycentric|wireframe] [--output framebuffer.tga] [--demo|path/to/model.obj]"
             echo
             echo "Defaults:"
             echo "  mode:  --serial"
-            echo "  fill:  flat"
+            echo "  shader: diffuse"
+            echo "  fill:  shaded"
             echo "  model: obj/diablo3_pose/diablo3_pose.obj"
+            echo "  output: framebuffer.tga"
             exit 0
             ;;
         *)
@@ -46,4 +66,4 @@ done
 
 cmake -S . -B build -DRASTERIZER_PARALLEL="$parallel"
 cmake --build build -j
-build/not_so_tinyrenderer --fill "$fill_mode" "$model_path"
+build/not_so_tinyrenderer --shader "$shader_mode" --fill "$fill_mode" --output "$output_path" "$model_path"

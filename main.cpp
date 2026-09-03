@@ -102,6 +102,11 @@ struct DiffuseShader : IShader {
     }
 };
 
+enum class ShaderMode {
+    Random,
+    Diffuse
+};
+
 [[maybe_unused]] constexpr TGAColor white   = {{255, 255, 255, 255}, 4}; // attention, BGRA order
 [[maybe_unused]] constexpr TGAColor green   = {{  0, 255,   0, 255}, 4};
 [[maybe_unused]] constexpr TGAColor red     = {{  0,   0, 255, 255}, 4};
@@ -111,10 +116,17 @@ struct DiffuseShader : IShader {
 // FillMode enum moved to notverygl.h
 
 std::optional<FillMode> parse_fill_mode(const std::string& mode) {
+    if (mode == "shaded") return FillMode::Shaded;
     if (mode == "flat") return FillMode::Flat;
     if (mode == "intensity") return FillMode::Intensity;
     if (mode == "barycentric") return FillMode::Barycentric;
     if (mode == "wireframe") return FillMode::Wireframe;
+    return std::nullopt;
+}
+
+std::optional<ShaderMode> parse_shader_mode(const std::string& mode) {
+    if (mode == "random") return ShaderMode::Random;
+    if (mode == "diffuse") return ShaderMode::Diffuse;
     return std::nullopt;
 }
 
@@ -248,10 +260,8 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
-void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode) {
-    const vec3 light{3,2,3};
-    Model model(model_path);
-    DiffuseShader shader(model, 0.34, light);
+template<typename Shader>
+void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader& shader, FillMode fill_mode) {
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
         vec4 clip[3];
@@ -264,8 +274,23 @@ void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode
         for (int j=0; j<3; j++) c[j] = std::rand()%255;
 
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
+        shader.color = flat_color;
         
         rasterize(clip, shader, framebuffer, fill_mode, flat_color);
+    }
+}
+
+void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode, ShaderMode shader_mode) {
+    const vec3 light_world{3,2,3};
+    const vec4 light_eye = ModelView * vec4{light_world.x(), light_world.y(), light_world.z(), 1.};
+    Model model(model_path);
+
+    if (shader_mode == ShaderMode::Random) {
+        RandomShader shader(model);
+        render_model_with_shader(framebuffer, model, shader, fill_mode);
+    } else {
+        DiffuseShader shader(model, 0.34, light_eye.xyz());
+        render_model_with_shader(framebuffer, model, shader, fill_mode);
     }
 }
 
@@ -307,7 +332,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " path/to/model.obj\n"
                   << "       " << argv[0] << " --demo\n"
-                  << "       " << argv[0] << " --fill flat|intensity|barycentric path/to/model.obj\n";
+                  << "       " << argv[0] << " --shader random|diffuse --fill shaded|flat|intensity|barycentric|wireframe --output framebuffer.tga path/to/model.obj\n";
         return 1;
     }
 
@@ -324,13 +349,15 @@ int main(int argc, char** argv) {
 
     TGAImage framebuffer(width, height, TGAImage::RGB);
 
-    FillMode fill_mode = FillMode::Flat;
+    FillMode fill_mode = FillMode::Shaded;
+    ShaderMode shader_mode = ShaderMode::Diffuse;
+    std::string output_path = "framebuffer.tga";
     std::string mode;
     for (int i = 1; i < argc; i++) {
         const std::string arg = argv[i];
         if (arg == "--fill") {
             if (i + 1 >= argc) {
-                std::cerr << "--fill expects flat, intensity, barycentric, or wireframe\n";
+                std::cerr << "--fill expects shaded, flat, intensity, barycentric, or wireframe\n";
                 return 1;
             }
             const std::optional<FillMode> parsed_fill_mode = parse_fill_mode(argv[++i]);
@@ -339,6 +366,23 @@ int main(int argc, char** argv) {
                 return 1;
             }
             fill_mode = *parsed_fill_mode;
+        } else if (arg == "--shader") {
+            if (i + 1 >= argc) {
+                std::cerr << "--shader expects random or diffuse\n";
+                return 1;
+            }
+            const std::optional<ShaderMode> parsed_shader_mode = parse_shader_mode(argv[++i]);
+            if (!parsed_shader_mode) {
+                std::cerr << "Unknown shader: " << argv[i] << "\n";
+                return 1;
+            }
+            shader_mode = *parsed_shader_mode;
+        } else if (arg == "--output") {
+            if (i + 1 >= argc) {
+                std::cerr << "--output expects a .tga path\n";
+                return 1;
+            }
+            output_path = argv[++i];
         } else {
             mode = arg;
         }
@@ -352,13 +396,13 @@ int main(int argc, char** argv) {
     if (mode == "--demo") {
         render_demo(framebuffer, fill_mode);
     } else {
-        render_model(framebuffer, mode, fill_mode);
+        render_model(framebuffer, mode, fill_mode, shader_mode);
     }
     const auto render_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
     std::clog << "Render time: " << render_duration.count() << " ms\n";
 
-    framebuffer.write_tga_file("framebuffer.tga");
+    framebuffer.write_tga_file(output_path.c_str());
     TGAImage zbuffer_image = depthbuffer_to_image(zbuffer);
     zbuffer_image.write_tga_file("zbuffer.tga");
     write_depthbuffer_text(zbuffer, "zbuffer.txt");
