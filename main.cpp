@@ -62,8 +62,9 @@ struct SolidShader : IShader {
 struct DiffuseShader : IShader {
     const Model& model;
     TGAColor color = {};
-    vec3 tri[3]; // triangle in eye/view/camera coordinates
-    vec3 light;  // position of light source
+    vec3 tri[3];      // triangle in eye/view/camera coordinates
+    vec3 tri_norm[3]; // normal of triangle vertex in eye/view/camera coordinates
+    vec3 light;       // position of light source
 
     vec3 normal;
     double ambient_strength = 0.2;
@@ -71,10 +72,18 @@ struct DiffuseShader : IShader {
 
     DiffuseShader(const Model& m, const double& ambient, const double& diffuse, const vec3& light) :
         model(m),
-        light(light),
+        light(unit_vector(light)),
         ambient_strength(ambient),
         diffuse_strength(diffuse)
     {}
+
+    vec3 interpolateNormal(const vec3 bar) const {
+        return unit_vector(
+            tri_norm[0] * bar.x() +
+            tri_norm[1] * bar.y() +
+            tri_norm[2] * bar.z()
+        );
+    }
 
     // Coordinate space: eye/view space.
     // vertex(face, vert):
@@ -88,13 +97,17 @@ struct DiffuseShader : IShader {
     //   - reconstructs eye-space fragment position p from tri[] and bar
     //   - computes light vector L = normalize(light_eye - p)
     //   - computes view vector V = normalize(-p), because camera is origin in eye space
-    //   - uses face normal N already computed in eye space
+    //   - uses interpolated normal retrieved from gl_norm_Position already computed in eye space
 
     virtual vec4 vertex(const int face, const int vert) {
         vec3 v = model.vert(face, vert);                               // current vertex in object coordinates
         vec4 gl_Position = ModelView * vec4{v.x(), v.y(), v.z(), 1.};
 
+        vec3 object_normal = model.norm(face, vert);
+        vec4 eye_normal = ModelView * vec4{object_normal.x(), object_normal.y(), object_normal.z(), 0.};
+
         tri[vert] = gl_Position.xyz();                                 // in eye/view/camera coordinates
+        tri_norm[vert] = eye_normal.xyz();
         if (vert == 2) {
             normal = unit_vector(cross(tri[1]-tri[0], tri[2]-tri[0])); // direction depends on vertex winding and cross-product order
         }
@@ -105,7 +118,7 @@ struct DiffuseShader : IShader {
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
         const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z(); // bar is uvw which are the barycentric coordinates, not {x, y, z} in model/world/eye space
         const vec3 l = unit_vector(light-p);                             // so l differs for each point in the face?
-        const double diffuse = std::max(0., dot(normal,l));
+        const double diffuse = std::max(0., dot(interpolateNormal(bar),l));
 
         // weighted sum
         double total = ambient_strength + diffuse_strength * diffuse;
@@ -133,6 +146,7 @@ struct PhongSpecularShader : DiffuseShader {
     {}
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
+        const vec3 interpolated_n = interpolateNormal(bar);
         // TODO: reflection-vector specular:
         // p = interpolated eye-space fragment position
         // L = normalize(light - p)
@@ -141,12 +155,12 @@ struct PhongSpecularShader : DiffuseShader {
         // specular = pow(max(0, dot(R, V)), shininess)
         const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z();
         const vec3 l = unit_vector(light-p);
-        const double n_dot_l = dot(normal, l);
+        const double n_dot_l = dot(interpolated_n, l);
         const double diffuse = std::max(0., n_dot_l);
 
         double specular = 0.0;
         if (n_dot_l > 0.0) { // ensure that the light is actually in front of the face
-            const vec3 r = unit_vector(2 * n_dot_l * normal - l);
+            const vec3 r = unit_vector(2 * n_dot_l * interpolated_n - l);
             const vec3 v = unit_vector(-p); // because this calculation is done in the eye-space where the eye/camera is at the origin {0,0,0}
             specular = std::pow(std::max(0., dot(r,v)), shininess);
         }
@@ -180,6 +194,7 @@ struct BlinnPhongSpecularShader : DiffuseShader {
     {}
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
+        const vec3 interpolated_n = interpolateNormal(bar);
         // TODO: half-vector specular:
         // p = interpolated eye-space fragment position
         // L = normalize(light - p)
@@ -188,14 +203,14 @@ struct BlinnPhongSpecularShader : DiffuseShader {
         // specular = pow(max(0, dot(normal, H)), shininess)
         const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z();
         const vec3 l = unit_vector(light-p);
-        const double n_dot_l = dot(normal, l);
+        const double n_dot_l = dot(interpolated_n, l);
         const double diffuse = std::max(0., n_dot_l);
 
         double specular = 0.0;
         if (n_dot_l > 0.0) {
             const vec3 v = unit_vector(-p);
             const vec3 h = unit_vector(l + v);
-            specular = std::pow(std::max(0., dot(normal,h)), shininess);
+            specular = std::pow(std::max(0., dot(interpolated_n,h)), shininess);
         }
 
         // weighted sum
@@ -392,21 +407,21 @@ void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader&
 }
 
 void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode, ShaderMode shader_mode) {
-    const vec3 light_world{2,2,3};
-    const vec4 light_eye = ModelView * vec4{light_world.x(), light_world.y(), light_world.z(), 1.};
+    const vec3 light_world{1,1,1};
+    const vec4 light_eye = ModelView * vec4{light_world.x(), light_world.y(), light_world.z(), 0.};
     Model model(model_path);
 
     if (shader_mode == ShaderMode::Random) {
         RandomShader shader(model);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else if (shader_mode == ShaderMode::PhongSpecular) {
-        PhongSpecularShader shader(model, 0.1, 0.7, light_eye.xyz(), 0.5, 32.0);
+        PhongSpecularShader shader(model, 0.3, 0.4, light_eye.xyz(), 0.9, 35.0);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else if (shader_mode == ShaderMode::BlinnPhongSpecular) {
-        BlinnPhongSpecularShader shader(model, 0.1, 0.7, light_eye.xyz(), 0.5, 32.0);
+        BlinnPhongSpecularShader shader(model, 0.3, 0.4, light_eye.xyz(), 0.9, 35.0);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else {
-        DiffuseShader shader(model, 0.1, 0.7, light_eye.xyz());
+        DiffuseShader shader(model, 0.3, 0.4, light_eye.xyz());
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     }
 }
