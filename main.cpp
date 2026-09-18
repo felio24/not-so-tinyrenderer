@@ -72,7 +72,7 @@ struct DiffuseShader : IShader {
 
     DiffuseShader(const Model& m, const double& ambient, const double& diffuse, const vec3& light) :
         model(m),
-        light(unit_vector(light)),
+        light(light),
         ambient_strength(ambient),
         diffuse_strength(diffuse)
     {}
@@ -117,8 +117,9 @@ struct DiffuseShader : IShader {
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
         const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z(); // bar is uvw which are the barycentric coordinates, not {x, y, z} in model/world/eye space
-        const vec3 l = unit_vector(light-p);                             // so l differs for each point in the face?
-        const double diffuse = std::max(0., dot(interpolateNormal(bar),l));
+        // const vec3 point_l = unit_vector(light-p);
+        const vec3 directional_l = unit_vector(light); // directional l is constant for all fragments
+        const double diffuse = std::max(0., dot(interpolateNormal(bar), directional_l));
 
         // weighted sum
         double total = ambient_strength + diffuse_strength * diffuse;
@@ -154,13 +155,14 @@ struct PhongSpecularShader : DiffuseShader {
         // R = normalize(2 * dot(normal, L) * normal - L)
         // specular = pow(max(0, dot(R, V)), shininess)
         const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z();
-        const vec3 l = unit_vector(light-p);
-        const double n_dot_l = dot(interpolated_n, l);
+        // const vec3 point_l = unit_vector(light-p);
+        const vec3 directional_l = unit_vector(light);
+        const double n_dot_l = dot(interpolated_n, directional_l);
         const double diffuse = std::max(0., n_dot_l);
 
         double specular = 0.0;
         if (n_dot_l > 0.0) { // ensure that the light is actually in front of the face
-            const vec3 r = unit_vector(2 * n_dot_l * interpolated_n - l);
+            const vec3 r = unit_vector(2 * n_dot_l * interpolated_n - directional_l);
             const vec3 v = unit_vector(-p); // because this calculation is done in the eye-space where the eye/camera is at the origin {0,0,0}
             specular = std::pow(std::max(0., dot(r,v)), shininess);
         }
@@ -202,14 +204,15 @@ struct BlinnPhongSpecularShader : DiffuseShader {
         // H = normalize(L + V)
         // specular = pow(max(0, dot(normal, H)), shininess)
         const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z();
-        const vec3 l = unit_vector(light-p);
-        const double n_dot_l = dot(interpolated_n, l);
+        // const vec3 point_l = unit_vector(light-p);
+        const vec3 directional_l = unit_vector(light);
+        const double n_dot_l = dot(interpolated_n, directional_l);
         const double diffuse = std::max(0., n_dot_l);
 
         double specular = 0.0;
         if (n_dot_l > 0.0) {
             const vec3 v = unit_vector(-p);
-            const vec3 h = unit_vector(l + v);
+            const vec3 h = unit_vector(directional_l + v);
             specular = std::pow(std::max(0., dot(interpolated_n,h)), shininess);
         }
 
