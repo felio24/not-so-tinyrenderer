@@ -65,17 +65,21 @@ struct DiffuseShader : IShader {
     vec3 tri[3];      // triangle in eye/view/camera coordinates
     vec3 tri_norm[3]; // normal of triangle vertex in eye/view/camera coordinates
     vec3 light;       // position of light source
+    vec3 eye;         // position of eye in eye/view/camera coordinates
 
     vec3 normal;
     double ambient_strength = 0.2;
     double diffuse_strength = 0.6;
 
-    DiffuseShader(const Model& m, const double& ambient, const double& diffuse, const vec3& light) :
+    DiffuseShader(const Model& m, const double& ambient, const double& diffuse, const vec3& light, const vec3& world_eye) :
         model(m),
         light(light),
         ambient_strength(ambient),
         diffuse_strength(diffuse)
-    {}
+    {
+        const vec4 eye_eye = ModelView * vec4{world_eye.x(), world_eye.y(), world_eye.z(), 1};
+        eye = eye_eye.xyz();
+    }
 
     vec3 interpolateNormal(const vec3 bar) const {
         return unit_vector(
@@ -95,7 +99,7 @@ struct DiffuseShader : IShader {
     // fragment(bar):
     //   - receives barycentric weights only
     //   - reconstructs eye-space fragment position p from tri[] and bar
-    //   - computes light vector L = normalize(light_eye - p)
+    //   - computes light vector L = normalize(light_eye - p) for point light, normalize(light) for directional light
     //   - computes view vector V = normalize(-p), because camera is origin in eye space
     //   - uses interpolated normal retrieved from gl_norm_Position already computed in eye space
 
@@ -116,7 +120,7 @@ struct DiffuseShader : IShader {
     }
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
-        const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z(); // bar is uvw which are the barycentric coordinates, not {x, y, z} in model/world/eye space
+        // const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z(); // bar is uvw which are the barycentric coordinates, not {x, y, z} in model/world/eye space
         // const vec3 point_l = unit_vector(light-p);
         const vec3 directional_l = unit_vector(light); // directional l is constant for all fragments
         const double diffuse = std::max(0., dot(interpolateNormal(bar), directional_l));
@@ -139,9 +143,10 @@ struct PhongSpecularShader : DiffuseShader {
         const double& diffuse,
         const vec3& light,
         const double& specular,
-        const double& exponent
+        const double& exponent,
+        const vec3& world_eye
     ) :
-        DiffuseShader(m, ambient, diffuse, light),
+        DiffuseShader(m, ambient, diffuse, light, world_eye),
         specular_strength(specular),
         shininess(exponent)
     {}
@@ -163,7 +168,7 @@ struct PhongSpecularShader : DiffuseShader {
         double specular = 0.0;
         if (n_dot_l > 0.0) { // ensure that the light is actually in front of the face
             const vec3 r = unit_vector(2 * n_dot_l * interpolated_n - directional_l);
-            const vec3 v = unit_vector(-p); // because this calculation is done in the eye-space where the eye/camera is at the origin {0,0,0}
+            const vec3 v = unit_vector(eye-p);
             specular = std::pow(std::max(0., dot(r,v)), shininess);
         }
         
@@ -188,9 +193,10 @@ struct BlinnPhongSpecularShader : DiffuseShader {
         const double& diffuse,
         const vec3& light,
         const double& specular,
-        const double& exponent
+        const double& exponent,
+        const vec3& world_eye
     ) :
-        DiffuseShader(m, ambient, diffuse, light),
+        DiffuseShader(m, ambient, diffuse, light, world_eye),
         specular_strength(specular),
         shininess(exponent)
     {}
@@ -211,7 +217,7 @@ struct BlinnPhongSpecularShader : DiffuseShader {
 
         double specular = 0.0;
         if (n_dot_l > 0.0) {
-            const vec3 v = unit_vector(-p);
+            const vec3 v = unit_vector(eye-p);
             const vec3 h = unit_vector(directional_l + v);
             specular = std::pow(std::max(0., dot(interpolated_n,h)), shininess);
         }
@@ -409,22 +415,22 @@ void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader&
     }
 }
 
-void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode, ShaderMode shader_mode) {
-    const vec3 light_world{1,1,1};
-    const vec4 light_eye = ModelView * vec4{light_world.x(), light_world.y(), light_world.z(), 0.};
+void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode, ShaderMode shader_mode, const vec3& eye_world) {
+    const vec3 world_light{1,1,1};
+    const vec4 eye_light = ModelView * vec4{world_light.x(), world_light.y(), world_light.z(), 0.};
     Model model(model_path);
 
     if (shader_mode == ShaderMode::Random) {
         RandomShader shader(model);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else if (shader_mode == ShaderMode::PhongSpecular) {
-        PhongSpecularShader shader(model, 0.3, 0.4, light_eye.xyz(), 0.9, 35.0);
+        PhongSpecularShader shader(model, 0.3, 0.4, eye_light.xyz(), 0.9, 35.0, eye_world);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else if (shader_mode == ShaderMode::BlinnPhongSpecular) {
-        BlinnPhongSpecularShader shader(model, 0.3, 0.4, light_eye.xyz(), 0.9, 35.0);
+        BlinnPhongSpecularShader shader(model, 0.3, 0.4, eye_light.xyz(), 0.9, 35.0, eye_world);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else {
-        DiffuseShader shader(model, 0.3, 0.4, light_eye.xyz());
+        DiffuseShader shader(model, 0.3, 0.4, eye_light.xyz(), eye_world);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     }
 }
@@ -531,7 +537,7 @@ int main(int argc, char** argv) {
     if (mode == "--demo") {
         render_demo(framebuffer, fill_mode);
     } else {
-        render_model(framebuffer, mode, fill_mode, shader_mode);
+        render_model(framebuffer, mode, fill_mode, shader_mode, eye);
     }
     const auto render_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
