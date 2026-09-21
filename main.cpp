@@ -64,6 +64,7 @@ struct DiffuseShader : IShader {
     TGAColor color = {};
     vec3 tri[3];      // triangle in eye/view/camera coordinates
     vec3 tri_norm[3]; // normal of triangle vertex in eye/view/camera coordinates
+    vec2 tri_uv[3];   // uv coordinate of triangle vertex
     vec3 light;       // position of light source
     vec3 eye;         // position of eye in eye/view/camera coordinates
 
@@ -86,6 +87,13 @@ struct DiffuseShader : IShader {
             tri_norm[0] * bar.x() +
             tri_norm[1] * bar.y() +
             tri_norm[2] * bar.z()
+        );
+    }
+
+    vec2 interpolateUV(const vec3 bar) const {
+        return (tri_uv[0] * bar.x() +
+            tri_uv[1] * bar.y() +
+            tri_uv[2] * bar.z()
         );
     }
 
@@ -112,6 +120,9 @@ struct DiffuseShader : IShader {
 
         tri[vert] = gl_Position.xyz();                                 // in eye/view/camera coordinates
         tri_norm[vert] = eye_normal.xyz();
+        if (model.has_normalmap()) {
+            tri_uv[vert] = model.uv(face, vert);   
+        }
         if (vert == 2) {
             normal = unit_vector(cross(tri[1]-tri[0], tri[2]-tri[0])); // direction depends on vertex winding and cross-product order
         }
@@ -152,7 +163,27 @@ struct PhongSpecularShader : DiffuseShader {
     {}
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
-        const vec3 interpolated_n = interpolateNormal(bar);
+        vec3 interpolated_n;
+        if (model.has_normalmap()) {
+            const vec2 interpolated_uv = interpolateUV(bar);
+            TGAColor sample = model.normalmap_sample(interpolated_uv);
+            const vec3 object_normal{
+                sample[2] / 255.0 * 2.0 - 1.0, // red -> x
+                sample[1] / 255.0 * 2.0 - 1.0, // green -> y
+                sample[0] / 255.0 * 2.0 - 1.0  // blue -> z
+            };
+
+            interpolated_n = unit_vector(
+                (ModelView * vec4{
+                    object_normal.x(),
+                    object_normal.y(),
+                    object_normal.z(),
+                    0.0
+                }).xyz()
+            );
+        } else {
+            interpolated_n = interpolateNormal(bar);
+        }
         // TODO: reflection-vector specular:
         // p = interpolated eye-space fragment position
         // L = normalize(light - p)
@@ -202,7 +233,27 @@ struct BlinnPhongSpecularShader : DiffuseShader {
     {}
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
-        const vec3 interpolated_n = interpolateNormal(bar);
+        vec3 interpolated_n;
+        if (model.has_normalmap()) {
+            const vec2 interpolated_uv = interpolateUV(bar);
+            TGAColor sample = model.normalmap_sample(interpolated_uv);
+            const vec3 object_normal{
+                sample[2] / 255.0 * 2.0 - 1.0, // red -> x
+                sample[1] / 255.0 * 2.0 - 1.0, // green -> y
+                sample[0] / 255.0 * 2.0 - 1.0  // blue -> z
+            };
+
+            interpolated_n = unit_vector(
+                (ModelView * vec4{
+                    object_normal.x(),
+                    object_normal.y(),
+                    object_normal.z(),
+                    0.0
+                }).xyz()
+            );
+        } else {
+            interpolated_n = interpolateNormal(bar);
+        }
         // TODO: half-vector specular:
         // p = interpolated eye-space fragment position
         // L = normalize(light - p)
