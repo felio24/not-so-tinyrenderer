@@ -120,7 +120,7 @@ struct DiffuseShader : IShader {
 
         tri[vert] = gl_Position.xyz();                                 // in eye/view/camera coordinates
         tri_norm[vert] = eye_normal.xyz();
-        if (model.has_normalmap()) {
+        if (model.has_normalmap() || model.has_diffusemap() || model.has_specularmap()) {
             tri_uv[vert] = model.uv(face, vert);   
         }
         if (vert == 2) {
@@ -133,14 +133,20 @@ struct DiffuseShader : IShader {
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const {
         // const vec3 p = tri[0] * bar.x() + tri[1] * bar.y() + tri[2] * bar.z(); // bar is uvw which are the barycentric coordinates, not {x, y, z} in model/world/eye space
         // const vec3 point_l = unit_vector(light-p);
+        const vec2 interpolated_uv = interpolateUV(bar);
         const vec3 directional_l = unit_vector(light); // directional l is constant for all fragments
         const double diffuse = std::max(0., dot(interpolateNormal(bar), directional_l));
 
         // weighted sum
+        TGAColor gl_FragColor = {{255, 255, 255, 255}, 4};
+        if (model.has_diffusemap()) {
+            gl_FragColor = model.diffusemap_sample(interpolated_uv);
+        }
         double total = ambient_strength + diffuse_strength * diffuse;
-        total = std::clamp(total, 0.0, 1.0);
-        uint8_t intensity = static_cast<uint8_t>(total * 255);
-        return {false, {{intensity, intensity, intensity, 255}, 4}};     // do not discard the pixel
+        for (int channel : {0,1,2}) {
+            gl_FragColor[channel] = static_cast<std::uint8_t>(std::min(255.0, gl_FragColor[channel] * total));
+        }
+        return {false, gl_FragColor};     // do not discard the pixel
     }
 };
 
@@ -164,8 +170,8 @@ struct PhongSpecularShader : DiffuseShader {
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
         vec3 interpolated_n;
+        const vec2 interpolated_uv = interpolateUV(bar);
         if (model.has_normalmap()) {
-            const vec2 interpolated_uv = interpolateUV(bar);
             TGAColor sample = model.normalmap_sample(interpolated_uv);
             const vec3 object_normal{
                 sample[2] / 255.0 * 2.0 - 1.0, // red -> x
@@ -200,16 +206,22 @@ struct PhongSpecularShader : DiffuseShader {
         if (n_dot_l > 0.0) { // ensure that the light is actually in front of the face
             const vec3 r = unit_vector(2 * n_dot_l * interpolated_n - directional_l);
             const vec3 v = unit_vector(eye-p);
-            specular = std::pow(std::max(0., dot(r,v)), shininess);
+            double specular_mask = 1.0;
+            if (model.has_specularmap()) {
+                specular_mask = static_cast<double>(model.specularmap_sample(interpolated_uv)[0]) / 255.0;
+            }
+            specular = 3 * specular_mask * std::pow(std::max(0., dot(r,v)), shininess);
         }
         
         // weighted sum
         TGAColor gl_FragColor = {{255, 255, 255, 255}, 4};
+        if (model.has_diffusemap()) {
+            gl_FragColor = model.diffusemap_sample(interpolated_uv);
+        }
         double total = ambient_strength + diffuse_strength * diffuse + specular_strength * specular;
-        total = std::clamp(total, 0.0, 1.0);
-        //uint8_t intensity = static_cast<uint8_t>(total * 255);
-        for (int channel : {0,1,2})
-            gl_FragColor[channel] *= std::min(1., total);
+        for (int channel : {0,1,2}) {
+            gl_FragColor[channel] = static_cast<std::uint8_t>(std::min(255.0, gl_FragColor[channel] * total));
+        }
         return {false, gl_FragColor};     // do not discard the pixel
     }
 };
@@ -234,8 +246,8 @@ struct BlinnPhongSpecularShader : DiffuseShader {
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
         vec3 interpolated_n;
+        const vec2 interpolated_uv = interpolateUV(bar);
         if (model.has_normalmap()) {
-            const vec2 interpolated_uv = interpolateUV(bar);
             TGAColor sample = model.normalmap_sample(interpolated_uv);
             const vec3 object_normal{
                 sample[2] / 255.0 * 2.0 - 1.0, // red -> x
@@ -270,16 +282,22 @@ struct BlinnPhongSpecularShader : DiffuseShader {
         if (n_dot_l > 0.0) {
             const vec3 v = unit_vector(eye-p);
             const vec3 h = unit_vector(directional_l + v);
-            specular = std::pow(std::max(0., dot(interpolated_n,h)), shininess);
+            double specular_mask = 1.0;
+            if (model.has_specularmap()) {
+                specular_mask = static_cast<double>(model.specularmap_sample(interpolated_uv)[0]) / 255.0;
+            }
+            specular = 3 * specular_mask * std::pow(std::max(0., dot(interpolated_n,h)), shininess);
         }
 
         // weighted sum
         TGAColor gl_FragColor = {{255, 255, 255, 255}, 4};
+        if (model.has_diffusemap()) {
+            gl_FragColor = model.diffusemap_sample(interpolated_uv);
+        }
         double total = ambient_strength + diffuse_strength * diffuse + specular_strength * specular;
-        total = std::clamp(total, 0.0, 1.0);
-        //uint8_t intensity = static_cast<uint8_t>(total * 255);
-        for (int channel : {0,1,2})
-            gl_FragColor[channel] *= std::min(1., total);
+        for (int channel : {0,1,2}) {
+            gl_FragColor[channel] = static_cast<std::uint8_t>(std::min(255.0, gl_FragColor[channel] * total));
+        }
         return {false, gl_FragColor};     // do not discard the pixel
     }
 };
@@ -475,13 +493,13 @@ void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode
         RandomShader shader(model);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else if (shader_mode == ShaderMode::PhongSpecular) {
-        PhongSpecularShader shader(model, 0.3, 0.4, eye_light.xyz(), 0.9, 35.0, eye_world);
+        PhongSpecularShader shader(model, 0.4, 1.0, eye_light.xyz(), 1.0, 35.0, eye_world);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else if (shader_mode == ShaderMode::BlinnPhongSpecular) {
-        BlinnPhongSpecularShader shader(model, 0.3, 0.4, eye_light.xyz(), 0.9, 35.0, eye_world);
+        BlinnPhongSpecularShader shader(model, 0.4, 1.0, eye_light.xyz(), 1.0, 35.0, eye_world);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     } else {
-        DiffuseShader shader(model, 0.3, 0.4, eye_light.xyz(), eye_world);
+        DiffuseShader shader(model, 0.4, 1.0, eye_light.xyz(), eye_world);
         render_model_with_shader(framebuffer, model, shader, fill_mode);
     }
 }

@@ -14,6 +14,12 @@ class Model {
 
     TGAImage normalmap;
     bool normalmap_loaded = false;
+
+    TGAImage diffusemap;
+    bool diffusemap_loaded = false;
+
+    TGAImage specularmap;
+    bool specularmap_loaded = false;
 public:
     Model(const std::string filename);
     
@@ -32,4 +38,8 @@ public:
 
     bool has_normalmap() const;
     TGAColor normalmap_sample(const vec2& uv) const;
+    bool has_diffusemap() const;
+    TGAColor diffusemap_sample(const vec2& uv) const;
+    bool has_specularmap() const;
+    TGAColor specularmap_sample(const vec2& uv) const;
 }; 

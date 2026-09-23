@@ -9,6 +9,8 @@ Model::Model(const std::string filename) {
     const std::size_t sz = filename.size() ;
 
     normalmap_loaded = normalmap.read_tga_file(filename.substr(0, sz-4) + "_nm.tga");
+    diffusemap_loaded = diffusemap.read_tga_file(filename.substr(0, sz-4) + "_diffuse.tga");
+    specularmap_loaded = specularmap.read_tga_file(filename.substr(0, sz-4) + "_spec.tga");
 
     std::ifstream in(filename);
     std::string s;
@@ -139,4 +141,46 @@ TGAColor Model::normalmap_sample(const vec2& uv) const {
     );
 
     return normalmap.get(x, y);
+}
+
+bool Model::has_diffusemap() const {
+    return diffusemap_loaded;
+}
+
+TGAColor Model::diffusemap_sample(const vec2& uv) const {
+    assert(diffusemap_loaded);
+
+    const int x = std::clamp(
+        static_cast<int>(uv.x() * (diffusemap.width() - 1)),
+        0,
+        diffusemap.width() - 1
+    );
+    const int y = std::clamp(
+        static_cast<int>((1 - uv.y()) * (diffusemap.height() - 1)), // check for vertically mirrored normal map
+        0,
+        diffusemap.height() - 1
+    );
+
+    return diffusemap.get(x, y);
+}
+
+bool Model::has_specularmap() const {
+    return specularmap_loaded;
+}
+
+TGAColor Model::specularmap_sample(const vec2& uv) const {
+    assert(specularmap_loaded);
+
+    const int x = std::clamp(
+        static_cast<int>(uv.x() * (specularmap.width() - 1)),
+        0,
+        specularmap.width() - 1
+    );
+    const int y = std::clamp(
+        static_cast<int>((1 - uv.y()) * (specularmap.height() - 1)), // check for vertically mirrored normal map
+        0,
+        specularmap.height() - 1
+    );
+
+    return specularmap.get(x, y);
 }
