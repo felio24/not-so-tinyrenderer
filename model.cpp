@@ -7,10 +7,15 @@
 
 Model::Model(const std::string filename) {
     const std::size_t sz = filename.size() ;
+    const std::string texture_prefix = filename.substr(0, sz-4);
 
-    normalmap_loaded = normalmap.read_tga_file(filename.substr(0, sz-4) + "_nm.tga");
-    diffusemap_loaded = diffusemap.read_tga_file(filename.substr(0, sz-4) + "_diffuse.tga");
-    specularmap_loaded = specularmap.read_tga_file(filename.substr(0, sz-4) + "_spec.tga");
+    if (normalmap.read_tga_file(texture_prefix + "_nm_tangent.tga")) {
+        normalmap_space_ = NormalMapSpace::Tangent;
+    } else if (normalmap.read_tga_file(texture_prefix + "_nm.tga")) {
+        normalmap_space_ = NormalMapSpace::Object;
+    }
+    diffusemap_loaded = diffusemap.read_tga_file(texture_prefix + "_diffuse.tga");
+    specularmap_loaded = specularmap.read_tga_file(texture_prefix + "_spec.tga");
 
     std::ifstream in(filename);
     std::string s;
@@ -123,11 +128,19 @@ vec2 Model::uv(int iface, int nthtexcoord) const {
 }
 
 bool Model::has_normalmap() const {
-    return normalmap_loaded;
+    return normalmap_space_ != NormalMapSpace::None;
+}
+
+bool Model::has_normaltangentmap() const {
+    return normalmap_space_ == NormalMapSpace::Tangent;
+}
+
+NormalMapSpace Model::normalmap_space() const {
+    return normalmap_space_;
 }
 
 TGAColor Model::normalmap_sample(const vec2& uv) const {
-    assert(normalmap_loaded);
+    assert(has_normalmap());
 
     const int x = std::clamp(
         static_cast<int>(uv.x() * (normalmap.width() - 1)),

@@ -68,7 +68,7 @@ struct DiffuseShader : IShader {
     vec3 light;       // position of light source
     vec3 eye;         // position of eye in eye/view/camera coordinates
 
-    vec3 normal;
+    mat<3,2> TB;
     double ambient_strength = 0.2;
     double diffuse_strength = 0.6;
 
@@ -124,7 +124,22 @@ struct DiffuseShader : IShader {
             tri_uv[vert] = model.uv(face, vert);   
         }
         if (vert == 2) {
-            normal = unit_vector(cross(tri[1]-tri[0], tri[2]-tri[0])); // direction depends on vertex winding and cross-product order
+            if (model.normalmap_space() == NormalMapSpace::Tangent) {
+                // TBN matrix setup
+                const vec3 e0 = tri[1] - tri[0];
+                const vec3 e1 = tri[2] - tri[0];
+                const vec2 u0 = tri_uv[1] - tri_uv[0];
+                const vec2 u1 = tri_uv[2] - tri_uv[0];
+
+                const mat<3,2> E{{e0.x(),e1.x()},{e0.y(),e1.y()},{e0.z(),e1.z()}};
+                const mat2 U{{u0.x(), u1.x()}, {u0.y(), u1.y()}};
+                TB = E * U.inverse();
+                
+                const vec3 unit_T = unit_vector(vec3(TB[0][0], TB[1][0], TB[2][0]));
+                const vec3 unit_B = unit_vector(vec3(TB[0][1], TB[1][1], TB[2][1]));
+                TB[0][0] = unit_T[0]; TB[1][0] = unit_T[1]; TB[2][0] = unit_T[2];
+                TB[0][1] = unit_B[0]; TB[1][1] = unit_B[1]; TB[2][1] = unit_B[2];
+            }
         }
 
         return Perspective * gl_Position;                              // in clip coordinates
@@ -169,26 +184,34 @@ struct PhongSpecularShader : DiffuseShader {
     {}
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
-        vec3 interpolated_n;
+        vec3 interpolated_n = interpolateNormal(bar);
         const vec2 interpolated_uv = interpolateUV(bar);
         if (model.has_normalmap()) {
             TGAColor sample = model.normalmap_sample(interpolated_uv);
-            const vec3 object_normal{
+            const vec3 sampled_normal{
                 sample[2] / 255.0 * 2.0 - 1.0, // red -> x
                 sample[1] / 255.0 * 2.0 - 1.0, // green -> y
                 sample[0] / 255.0 * 2.0 - 1.0  // blue -> z
             };
 
-            interpolated_n = unit_vector(
-                (ModelView * vec4{
-                    object_normal.x(),
-                    object_normal.y(),
-                    object_normal.z(),
-                    0.0
-                }).xyz()
-            );
-        } else {
-            interpolated_n = interpolateNormal(bar);
+            if (model.normalmap_space() == NormalMapSpace::Tangent) {
+                const mat3 TBN{{
+                    {TB[0][0], TB[0][1], interpolated_n.x()},
+                    {TB[1][0], TB[1][1], interpolated_n.y()},
+                    {TB[2][0], TB[2][1], interpolated_n.z()}
+                }};
+
+                interpolated_n = unit_vector(TBN * sampled_normal);
+            } else {
+                interpolated_n = unit_vector(
+                    (ModelView * vec4{
+                        sampled_normal.x(),
+                        sampled_normal.y(),
+                        sampled_normal.z(),
+                        0.0
+                    }).xyz()
+                );
+            }
         }
         // TODO: reflection-vector specular:
         // p = interpolated eye-space fragment position
@@ -245,26 +268,34 @@ struct BlinnPhongSpecularShader : DiffuseShader {
     {}
 
     virtual std::pair<bool,TGAColor> fragment(const vec3 bar) const override {
-        vec3 interpolated_n;
+        vec3 interpolated_n = interpolateNormal(bar);
         const vec2 interpolated_uv = interpolateUV(bar);
         if (model.has_normalmap()) {
             TGAColor sample = model.normalmap_sample(interpolated_uv);
-            const vec3 object_normal{
+            const vec3 sampled_normal{
                 sample[2] / 255.0 * 2.0 - 1.0, // red -> x
                 sample[1] / 255.0 * 2.0 - 1.0, // green -> y
                 sample[0] / 255.0 * 2.0 - 1.0  // blue -> z
             };
 
-            interpolated_n = unit_vector(
-                (ModelView * vec4{
-                    object_normal.x(),
-                    object_normal.y(),
-                    object_normal.z(),
-                    0.0
-                }).xyz()
-            );
-        } else {
-            interpolated_n = interpolateNormal(bar);
+            if (model.normalmap_space() == NormalMapSpace::Tangent) {
+                const mat3 TBN{{
+                    {TB[0][0], TB[0][1], interpolated_n.x()},
+                    {TB[1][0], TB[1][1], interpolated_n.y()},
+                    {TB[2][0], TB[2][1], interpolated_n.z()}
+                }};
+
+                interpolated_n = unit_vector(TBN * sampled_normal);
+            } else {
+                interpolated_n = unit_vector(
+                    (ModelView * vec4{
+                        sampled_normal.x(),
+                        sampled_normal.y(),
+                        sampled_normal.z(),
+                        0.0
+                    }).xyz()
+                );
+            }
         }
         // TODO: half-vector specular:
         // p = interpolated eye-space fragment position
