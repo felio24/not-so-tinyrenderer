@@ -530,6 +530,28 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
     }
 }
 
+std::vector<std::filesystem::path> find_obj_files(
+    const std::filesystem::path& input
+) {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> models;
+
+    if (fs::is_regular_file(input) && input.extension() == ".obj") {
+        models.push_back(input);
+    } else if (fs::is_directory(input)) {
+        for (const fs::directory_entry& entry :
+             fs::recursive_directory_iterator(input)) {
+            if (entry.is_regular_file() &&
+                entry.path().extension() == ".obj") {
+                models.push_back(entry.path());
+            }
+        }
+    }
+
+    std::sort(models.begin(), models.end());
+    return models;
+}
+
 template<typename Shader>
 void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader& shader, ViewMode view_mode) {
     std::srand(1234);
@@ -681,6 +703,12 @@ int main(int argc, char** argv) {
     }
     if (mode.empty()) {
         std::cerr << "Missing model path or --demo\n";
+        return 1;
+    }
+
+    settings.model_paths = find_obj_files(mode);
+    if (settings.model_paths.empty()) {
+        std::cerr << "No OBJ files found at: " << mode << '\n';
         return 1;
     }
 
