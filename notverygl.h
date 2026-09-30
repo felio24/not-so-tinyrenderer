@@ -1,13 +1,12 @@
 #include "tgaimage.h"
 #include "vec3.h"
 #include "mat.h"
-// Fill modes for triangle rasterization
-enum class FillMode {
+enum class ViewMode {
     Shaded,
     Flat,
-    Intensity,
-    Barycentric,
-    Wireframe
+    Wireframe,
+    Depth,
+    Barycentric
 };
 
 void lookat(const vec3& eye, const vec3& center, const vec3& up);
@@ -25,5 +24,4 @@ TGAColor grayscale(unsigned char v);
 TGAColor barycentric_color(double u, double v, double w);
 TGAColor wireframe(double u, double v, double w);
 
-// Rasterize a triangle (fill_mode and flat_color are provided by caller)
-void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer, FillMode fill_mode, const TGAColor &flat_color);
+void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer, ViewMode view_mode, const TGAColor &flat_color);

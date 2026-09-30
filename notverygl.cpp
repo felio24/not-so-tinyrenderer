@@ -25,7 +25,7 @@ void init_zbuffer(const int& width, const int& height) {
     zbuffer = std::vector(width*height, -std::numeric_limits<double>::infinity());
 }
 
-void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer, FillMode fill_mode, const TGAColor &flat_color) {
+void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer, ViewMode view_mode, const TGAColor &flat_color) {
     // NDC x,y:    [-1, 1]
     // screen x,y: [viewport pixel bounds]
     vec4 ndc[3] = {
@@ -74,14 +74,14 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
             if (discard) continue;                                 // fragment shader can discard current fragment
 
             zbuffer[depth_index] = z;
-            if (fill_mode == FillMode::Shaded) {
+            if (view_mode == ViewMode::Shaded) {
                 framebuffer.set(i, j, color);
-            } else if (fill_mode == FillMode::Flat) {
+            } else if (view_mode == ViewMode::Flat) {
                 framebuffer.set(i, j, flat_color);
-            } else if (fill_mode == FillMode::Intensity) {
+            } else if (view_mode == ViewMode::Depth) {
                 const double shade = std::clamp((z + 1.0) * 255.0 / 2.0, 0.0, 255.0);
                 framebuffer.set(i, j, grayscale(static_cast<unsigned char>(shade)));
-            } else if (fill_mode == FillMode::Barycentric) {
+            } else if (view_mode == ViewMode::Barycentric) {
                 framebuffer.set(i, j, barycentric_color(uvw.x(), uvw.y(), uvw.z()));
             } else {
                 framebuffer.set(i, j, wireframe(uvw.x(), uvw.y(), uvw.z()));

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -346,14 +347,12 @@ enum class ShaderMode {
 [[maybe_unused]] constexpr TGAColor blue    = {{255, 128,  64, 255}, 4};
 [[maybe_unused]] constexpr TGAColor yellow  = {{  0, 200, 255, 255}, 4};
 
-// FillMode enum moved to notverygl.h
-
-std::optional<FillMode> parse_fill_mode(const std::string& mode) {
-    if (mode == "shaded") return FillMode::Shaded;
-    if (mode == "flat") return FillMode::Flat;
-    if (mode == "intensity") return FillMode::Intensity;
-    if (mode == "barycentric") return FillMode::Barycentric;
-    if (mode == "wireframe") return FillMode::Wireframe;
+std::optional<ViewMode> parse_view_mode(const std::string& mode) {
+    if (mode == "shaded") return ViewMode::Shaded;
+    if (mode == "flat") return ViewMode::Flat;
+    if (mode == "intensity") return ViewMode::Depth;
+    if (mode == "barycentric") return ViewMode::Barycentric;
+    if (mode == "wireframe") return ViewMode::Wireframe;
     return std::nullopt;
 }
 
@@ -364,6 +363,42 @@ std::optional<ShaderMode> parse_shader_mode(const std::string& mode) {
     if (mode == "blinnphong") return ShaderMode::BlinnPhongSpecular;
     return std::nullopt;
 }
+
+struct SceneObject {
+    Model model;
+    mat4 transform;
+    ShaderMode shader_mode;
+};
+
+struct Scene {
+    std::vector<SceneObject> objects;
+    vec3 light_direction;
+};
+
+struct RenderSettings {
+    std::vector<std::filesystem::path> model_paths;
+
+    ViewMode view_mode = ViewMode::Shaded;
+    ShaderMode shader_mode = ShaderMode::Diffuse;
+
+    vec3 eye{-1, 0, 2};            // in world coordinates
+    vec3 center{0, 0, 0};
+    vec3 up{0, 1, 0};
+    vec3 light_direction{1, 1, 1}; // in world coordinates
+
+    double ambient = 0.4;
+    double diffuse = 1.0;
+    double specular = 1.0;
+    double shininess = 35.0;
+
+    std::filesystem::path output_path{"framebuffer.tga"};
+};
+
+struct RenderResult {
+    bool succeeded;
+    double duration_ms;
+    std::string error;
+};
 
 TGAColor grayscale(unsigned char v) {
     return {{v, v, v, 255}, 4};
@@ -496,7 +531,7 @@ void line(const int& ax, const int& ay, const int& bx, const int& by, TGAImage& 
 }
 
 template<typename Shader>
-void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader& shader, FillMode fill_mode) {
+void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader& shader, ViewMode view_mode) {
     std::srand(1234);
     for (int i = 0; i < model.nfaces(); i++) { // Loop over the number of triangles need to be rendered
         vec4 clip[3];
@@ -511,31 +546,42 @@ void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader&
         TGAColor flat_color = {{c[0], c[1], c[2], 255}, 4};
         shader.color = flat_color;
         
-        rasterize(clip, shader, framebuffer, fill_mode, flat_color);
+        rasterize(clip, shader, framebuffer, view_mode, flat_color);
     }
 }
 
-void render_model(TGAImage& framebuffer, const std::string& model_path, FillMode fill_mode, ShaderMode shader_mode, const vec3& eye_world) {
-    const vec3 world_light{1,1,1};
+void render_model(TGAImage& framebuffer, const std::string& model_path, const RenderSettings& settings) {
+    const vec3 world_light = settings.light_direction;
     const vec4 eye_light = ModelView * vec4{world_light.x(), world_light.y(), world_light.z(), 0.};
     Model model(model_path);
 
-    if (shader_mode == ShaderMode::Random) {
+    if (settings.view_mode != ViewMode::Shaded) {
         RandomShader shader(model);
-        render_model_with_shader(framebuffer, model, shader, fill_mode);
-    } else if (shader_mode == ShaderMode::PhongSpecular) {
-        PhongSpecularShader shader(model, 0.4, 1.0, eye_light.xyz(), 1.0, 35.0, eye_world);
-        render_model_with_shader(framebuffer, model, shader, fill_mode);
-    } else if (shader_mode == ShaderMode::BlinnPhongSpecular) {
-        BlinnPhongSpecularShader shader(model, 0.4, 1.0, eye_light.xyz(), 1.0, 35.0, eye_world);
-        render_model_with_shader(framebuffer, model, shader, fill_mode);
-    } else {
-        DiffuseShader shader(model, 0.4, 1.0, eye_light.xyz(), eye_world);
-        render_model_with_shader(framebuffer, model, shader, fill_mode);
+        render_model_with_shader(framebuffer, model, shader, settings.view_mode);
+        return;
+    }
+
+    switch (settings.shader_mode) {
+        case ShaderMode::PhongSpecular: {
+            PhongSpecularShader shader(model, settings.ambient, settings.diffuse, eye_light.xyz(), settings.specular, settings.shininess, settings.eye);
+            render_model_with_shader(framebuffer, model, shader, settings.view_mode);
+            break;
+        }
+        case ShaderMode::BlinnPhongSpecular: {
+            BlinnPhongSpecularShader shader(model, settings.ambient, settings.diffuse, eye_light.xyz(), settings.specular, settings.shininess, settings.eye);
+            render_model_with_shader(framebuffer, model, shader, settings.view_mode);
+            break;
+        }
+        default: {
+            DiffuseShader shader(model, settings.ambient, settings.diffuse, eye_light.xyz(), settings.eye);
+            render_model_with_shader(framebuffer, model, shader, settings.view_mode);
+            break;
+        }
     }
 }
 
-void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
+RenderResult render_demo(const RenderSettings& settings, TGAImage& framebuffer) {
+    const auto render_start = std::chrono::steady_clock::now();
     Triangle far = {
         vec4{-0.63, -0.69, -0.6, 1.0},
         vec4{ 0.71, -0.51, -0.6, 1.0},
@@ -549,8 +595,13 @@ void render_demo(TGAImage& framebuffer, FillMode fill_mode) {
 
     SolidShader far_shader(blue);
     SolidShader near_shader(red);
-    rasterize(far, far_shader, framebuffer, fill_mode, blue);
-    rasterize(near, near_shader, framebuffer, fill_mode, red);
+    rasterize(far, far_shader, framebuffer, settings.view_mode, blue);
+    rasterize(near, near_shader, framebuffer, settings.view_mode, red);
+    const auto render_end = std::chrono::steady_clock::now();
+    const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
+    std::string error_msg;
+    RenderResult result = {true, render_duration.count(), error_msg};
+    return result;
 }
 
 void log_openmp_status() {
@@ -569,6 +620,19 @@ void log_openmp_status() {
 #endif
 }
 
+RenderResult render(const RenderSettings& settings, TGAImage& framebuffer) {
+    const auto render_start = std::chrono::steady_clock::now();
+    for(const std::filesystem::path& model_path : settings.model_paths) {
+        render_model(framebuffer, model_path.string(), settings);
+    }
+
+    const auto render_end = std::chrono::steady_clock::now();
+    const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
+    std::string error_msg;
+    RenderResult result = {true, render_duration.count(), error_msg};
+    return result;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " path/to/model.obj\n"
@@ -579,20 +643,7 @@ int main(int argc, char** argv) {
 
     log_openmp_status();
 
-    const vec3    eye{-1,0,2}; // camera position
-    const vec3 center{0,0,0};  // camera direction
-    const vec3     up{0,1,0};  // camera up vector
-
-    lookat(eye, center, up);                                   // build the ModelView   matrix
-    init_perspective((eye-center).length());                   // build the Perspective matrix
-    init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
-    init_zbuffer(width, height);
-
-    TGAImage framebuffer(width, height, TGAImage::RGB);
-
-    FillMode fill_mode = FillMode::Shaded;
-    ShaderMode shader_mode = ShaderMode::Diffuse;
-    std::string output_path = "framebuffer.tga";
+    RenderSettings settings;
     std::string mode;
     for (int i = 1; i < argc; i++) {
         const std::string arg = argv[i];
@@ -601,12 +652,12 @@ int main(int argc, char** argv) {
                 std::cerr << "--fill expects shaded, flat, intensity, barycentric, or wireframe\n";
                 return 1;
             }
-            const std::optional<FillMode> parsed_fill_mode = parse_fill_mode(argv[++i]);
-            if (!parsed_fill_mode) {
+            const std::optional<ViewMode> parsed_view_mode = parse_view_mode(argv[++i]);
+            if (!parsed_view_mode) {
                 std::cerr << "Unknown fill mode: " << argv[i] << "\n";
                 return 1;
             }
-            fill_mode = *parsed_fill_mode;
+            settings.view_mode = *parsed_view_mode;
         } else if (arg == "--shader") {
             if (i + 1 >= argc) {
                 std::cerr << "--shader expects random or diffuse\n";
@@ -617,13 +668,13 @@ int main(int argc, char** argv) {
                 std::cerr << "Unknown shader: " << argv[i] << "\n";
                 return 1;
             }
-            shader_mode = *parsed_shader_mode;
+            settings.shader_mode = *parsed_shader_mode;
         } else if (arg == "--output") {
             if (i + 1 >= argc) {
                 std::cerr << "--output expects a .tga path\n";
                 return 1;
             }
-            output_path = argv[++i];
+            settings.output_path = argv[++i];
         } else {
             mode = arg;
         }
@@ -633,17 +684,24 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const auto render_start = std::chrono::steady_clock::now();
-    if (mode == "--demo") {
-        render_demo(framebuffer, fill_mode);
-    } else {
-        render_model(framebuffer, mode, fill_mode, shader_mode, eye);
-    }
-    const auto render_end = std::chrono::steady_clock::now();
-    const std::chrono::duration<double, std::milli> render_duration = render_end - render_start;
-    std::clog << "Render time: " << render_duration.count() << " ms\n";
+    lookat(settings.eye, settings.center, settings.up);        // build the ModelView matrix
+    init_perspective((settings.eye-settings.center).length()); // build the Perspective matrix
+    init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport matrix
+    init_zbuffer(width, height);
 
-    framebuffer.write_tga_file(output_path.c_str());
+    TGAImage framebuffer(width, height, TGAImage::RGB);
+
+    RenderResult result;
+    if (mode == "--demo") {
+        result = render_demo(settings, framebuffer);
+    } else {
+        settings.model_paths.emplace_back(mode);
+        result = render(settings, framebuffer);
+    }
+
+    std::clog << "Render time: " << result.duration_ms << " ms\n";
+
+    framebuffer.write_tga_file(settings.output_path.string());
     TGAImage zbuffer_image = depthbuffer_to_image(zbuffer);
     zbuffer_image.write_tga_file("zbuffer.tga");
     write_depthbuffer_text(zbuffer, "zbuffer.txt");

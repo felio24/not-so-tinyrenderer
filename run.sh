@@ -3,7 +3,7 @@
 set -e
 
 parallel=0
-fill_mode="shaded"
+view_mode="shaded"
 shader_mode="diffuse"
 model_path="obj/diablo3_pose/diablo3_pose.obj"
 output_path="framebuffer.tga"
@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
                 echo "--fill expects shaded, flat, intensity, barycentric, or wireframe" >&2
                 exit 1
             fi
-            fill_mode="$2"
+            view_mode="$2"
             shift 2
             ;;
         --shader)
@@ -66,4 +66,4 @@ done
 
 cmake -S . -B build -DRASTERIZER_PARALLEL="$parallel"
 cmake --build build -j
-build/not_so_tinyrenderer --shader "$shader_mode" --fill "$fill_mode" --output "$output_path" "$model_path"
+build/not_so_tinyrenderer --shader "$shader_mode" --fill "$view_mode" --output "$output_path" "$model_path"
