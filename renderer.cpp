@@ -10,6 +10,8 @@ extern mat4 ModelView, Perspective; // "OpenGL" state matrices
 [[maybe_unused]] constexpr TGAColor blue    = {{255, 128,  64, 255}, 4};
 [[maybe_unused]] constexpr TGAColor yellow  = {{  0, 200, 255, 255}, 4};
 
+namespace {
+
 struct RandomShader : IShader {
     const Model& model;
     TGAColor color = {};
@@ -313,28 +315,6 @@ struct BlinnPhongSpecularShader : DiffuseShader {
     }
 };
 
-std::vector<std::filesystem::path> find_obj_files(
-    const std::filesystem::path& input
-) {
-    namespace fs = std::filesystem;
-    std::vector<fs::path> models;
-
-    if (fs::is_regular_file(input) && input.extension() == ".obj") {
-        models.push_back(input);
-    } else if (fs::is_directory(input)) {
-        for (const fs::directory_entry& entry :
-             fs::recursive_directory_iterator(input)) {
-            if (entry.is_regular_file() &&
-                entry.path().extension() == ".obj") {
-                models.push_back(entry.path());
-            }
-        }
-    }
-
-    std::sort(models.begin(), models.end());
-    return models;
-}
-
 template<typename Shader>
 void render_model_with_shader(TGAImage& framebuffer, const Model& model, Shader& shader, ViewMode view_mode) {
     std::srand(1234);
@@ -383,6 +363,8 @@ void render_model(TGAImage& framebuffer, const std::string& model_path, const Re
             break;
         }
     }
+}
+
 }
 
 RenderResult render(const RenderSettings& settings) {

@@ -13,6 +13,7 @@
 #include "gui.h"
 #include "mat.h"
 #include "model.h"
+#include "modelgroup.h"
 #include "renderer.h"
 #include "tgaimage.h"
 

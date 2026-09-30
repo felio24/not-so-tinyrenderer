@@ -6,6 +6,47 @@
 
 #include "gui.h"
 
+namespace {
+    void draw_render_controls() {
+        ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Always);
+
+        ImGui::Begin("Render Controls", nullptr, ImGuiWindowFlags_NoResize);
+        ImGui::TextUnformatted("Tweak me!");
+
+        ImGui::SeparatorText("Scene");
+        ImGui::TextUnformatted("Model folder: -");
+        ImGui::TextUnformatted("Models: -");
+
+        ImGui::SeparatorText("View");
+        ImGui::TextUnformatted("View mode: Shaded");
+        ImGui::TextUnformatted("Lighting model: Diffuse");
+
+        ImGui::SeparatorText("Camera");
+        ImGui::TextUnformatted("Eye: -1.0, 0.0, 2.0");
+        ImGui::TextUnformatted("Target: 0.0, 0.0, 0.0");
+        ImGui::TextUnformatted("Up: 0.0, 1.0, 0.0");
+
+        ImGui::SeparatorText("Lighting and Material");
+        ImGui::TextUnformatted("Light direction: 1.0, 1.0, 1.0");
+        ImGui::TextUnformatted("Ambient: 0.4");
+        ImGui::TextUnformatted("Diffuse: 1.0");
+        ImGui::TextUnformatted("Specular: 1.0");
+        ImGui::TextUnformatted("Shininess: 35.0");
+
+        ImGui::SeparatorText("Output");
+        ImGui::TextUnformatted("Size: 800 x 800");
+        ImGui::TextUnformatted("File: framebuffer.tga");
+        ImGui::Spacing();
+
+        constexpr float render_button_width = 100.0f;
+        const float right_alignment_offset = ImGui::GetContentRegionAvail().x - render_button_width;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + right_alignment_offset);
+        ImGui::Button("Render >:)", ImVec2(render_button_width, 0));
+
+        ImGui::End();
+    }
+}
+
 int launch_gui() {
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
@@ -24,9 +65,18 @@ int launch_gui() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #endif
+    float main_scale = 1.0f;
+    if (GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor()) {
+        float y_scale = 1.0f;
+        glfwGetMonitorContentScale(primary_monitor, &main_scale, &y_scale);
+    }
 
     GLFWwindow* window = glfwCreateWindow(
-        600, 750, "Not So TinyRenderer", nullptr, nullptr
+        static_cast<int>(600 * main_scale),
+        static_cast<int>(750 * main_scale),
+        "Not-So-Tiny Rasterizer :')",
+        nullptr,
+        nullptr
     );
 
     if (!window) {
@@ -52,9 +102,7 @@ int launch_gui() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Render Controls");
-        ImGui::TextUnformatted("Not-So-TinyRenderer");
-        ImGui::End();
+        draw_render_controls();
 
         ImGui::Render();
 

@@ -101,6 +101,7 @@ add_executable(${PROJECT_NAME}
   main.cpp
   gui.cpp
   model.cpp
+  modelgroup.cpp
   notverygl.cpp
   renderer.cpp
   tgaimage.cpp
