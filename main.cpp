@@ -10,6 +10,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include "gui.h"
 #include "mat.h"
 #include "model.h"
 #include "renderer.h"
@@ -192,6 +193,10 @@ void log_openmp_status() {
 }
 
 int main(int argc, char** argv) {
+    if (argc == 1) {
+        return launch_gui();
+    }
+
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " path/to/model.obj\n"
                   << "       " << argv[0] << " --demo\n"
@@ -259,7 +264,7 @@ int main(int argc, char** argv) {
         std::cerr << "Rendering failed with message: " << result.error << '\n';
         return 1;
     } else {
-        std::clog << "Render time: " << result.duration_ms << " ms\n";
+    std::clog << "Render time: " << result.duration_ms << " ms\n";
     }    
     /*
     TGAImage zbuffer_image = depthbuffer_to_image(zbuffer);

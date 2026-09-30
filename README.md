@@ -40,6 +40,7 @@ Defaults:
 Useful variants:
 
 ```bash
+./run.sh --gui
 ./run.sh --demo
 ./run.sh obj/african_head/african_head.obj
 ./run.sh --shader random obj/african_head/african_head.obj
@@ -90,7 +91,28 @@ The model render can switch shaders without editing the source:
 
 For quick visual comparisons, run the same model with different `--shader` and `--output` values.
 
-## Fill Modes
+### Object-Space And Tangent-Space Normal Maps
+
+The model assets provide two alternative representations of the same kind of per-fragment surface detail:
+
+- `_nm.tga` stores normals in object space. Decode the sampled RGB value from `[0, 1]` to `[-1, 1]`, transform the resulting direction from object space into the lighting space, normalize it, and use it as the shading normal.
+- `_nm_tangent.tga` stores normals relative to the surface's local tangent frame. Decode the sample, multiply it by a TBN matrix whose columns are the tangent, bitangent, and mesh normal expressed in the lighting space, normalize the result, and use it as the shading normal.
+
+These maps are alternatives; they should not be combined. Prefer the tangent-space map when the mesh has mirrored or reused UV regions, deforms, or needs conventional asset-pipeline compatibility. An object-space map remains useful as a simpler fallback when it was baked for a fixed mesh and its UV layout does not reuse texels across incompatible surface orientations.
+
+In the current eye-space shader design, `tri` and `tri_norm` are already stored in eye space. A TBN frame derived from them is therefore also in eye space, so the tangent-space sample is transformed by `TBN` only and must not be transformed by `ModelView` a second time:
+
+```text
+_nm_tangent sample
+  -> decode RGB to a tangent-space direction
+  -> eye-space TBN * tangent-space direction
+  -> normalize
+  -> use for diffuse and specular lighting
+```
+
+The interpolated mesh normal is still needed as the `N` axis of the TBN frame. The TBN-transformed texture sample replaces that interpolated normal only as the final normal used by the lighting equations. If no usable normal map is available, the shader falls back to the interpolated mesh normal.
+
+## View Modes
 
 Triangle coloring can be switched without changing the rasterizer code:
 

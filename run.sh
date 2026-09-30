@@ -3,6 +3,7 @@
 set -e
 
 parallel=0
+launch_gui=0
 view_mode="shaded"
 shader_mode="diffuse"
 model_path="obj/diablo3_pose/diablo3_pose.obj"
@@ -16,6 +17,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --serial)
             parallel=0
+            shift
+            ;;
+        --gui)
+            launch_gui=1
             shift
             ;;
         --demo)
@@ -47,7 +52,8 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: ./run.sh [--serial|--parallel] [--shader random|diffuse|phong|blinnphong] [--fill shaded|flat|intensity|barycentric|wireframe] [--output framebuffer.tga] [--demo|path/to/model.obj]"
+            echo "Usage: ./run.sh [--serial|--parallel] --gui"
+            echo "       ./run.sh [--serial|--parallel] [--shader random|diffuse|phong|blinnphong] [--fill shaded|flat|intensity|barycentric|wireframe] [--output framebuffer.tga] [--demo|path/to/model.obj]"
             echo
             echo "Defaults:"
             echo "  mode:  --serial"
@@ -66,4 +72,9 @@ done
 
 cmake -S . -B build -DRASTERIZER_PARALLEL="$parallel"
 cmake --build build -j
-build/not_so_tinyrenderer --shader "$shader_mode" --fill "$view_mode" --output "$output_path" "$model_path"
+
+if [[ "$launch_gui" -eq 1 ]]; then
+    build/not_so_tinyrenderer
+else
+    build/not_so_tinyrenderer --shader "$shader_mode" --fill "$view_mode" --output "$output_path" "$model_path"
+fi
