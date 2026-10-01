@@ -3,19 +3,135 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "modelgroup.h"
+#include "renderer.h"
 
 #include "gui.h"
 
 namespace {
-    void draw_render_controls() {
+    struct GuiState {
+        RenderSettings settings;
+
+        std::vector<ModelGroup> model_groups;
+        std::size_t selected_group = 0;
+        std::vector<bool> selected_models;
+
+        RenderResult last_result;
+        std::string validation_error;
+    };
+
+    void draw_render_controls_scene_selection(GuiState& state) {
+        std::vector<std::string> items;
+
+        ImGui::SeparatorText("Scene");
+        if (state.model_groups.empty()) {
+            state.validation_error = "No OBJ models found in obj/";
+            ImGui::TextDisabled("%s", state.validation_error.c_str());
+            return;
+        }
+
+        for (const ModelGroup& models : state.model_groups)
+        {
+            items.emplace_back(models.name);
+        }
+
+        constexpr float label_width = 120.0f;
+
+        static ImGuiComboFlags flags = 0;
+        const char* preview = items.empty()
+            ? "No models found"
+            : items[state.selected_group].c_str();
+
+        if (ImGui::BeginTable("scene_fields", 2)) {
+            ImGui::TableSetupColumn(
+                "Label",
+                ImGuiTableColumnFlags_WidthFixed,
+                label_width
+            );
+            ImGui::TableSetupColumn(
+                "Field",
+                ImGuiTableColumnFlags_WidthStretch
+            );
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Model folder:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            if (ImGui::BeginCombo("##model_folder", preview, flags)) {
+                for (int n = 0; n < items.size(); n++)
+                {
+                    const bool is_selected = (state.selected_group == n);
+                    if (ImGui::Selectable(items[n].c_str(), is_selected)) {
+                        state.selected_group = n;
+                        state.selected_models.assign(
+                            state.model_groups[n].models.size(),
+                            false
+                        );
+                        state.settings.model_paths.clear();
+                    }
+
+                    // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Models:");
+
+            // Loop through selected model
+            const ModelGroup& selected_group = state.model_groups[state.selected_group];
+            const std::vector<std::filesystem::path>& models =
+                selected_group.models;
+
+            bool selection_changed = false;
+            for (std::size_t index = 0; index < models.size(); ++index) {
+                const std::string path_id = models[index].string();
+                const std::string filename = models[index].filename().string();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+                bool selected = state.selected_models[index];
+                ImGui::PushID(path_id.c_str());
+                if (ImGui::Checkbox(filename.c_str(), &selected)) {
+                    state.selected_models[index] = selected;
+                    selection_changed = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableNextRow();
+            }
+
+            if (selection_changed) {
+                state.settings.model_paths.clear();
+
+                for (std::size_t index = 0; index < models.size(); ++index) {
+                    if (state.selected_models[index]) {
+                        state.settings.model_paths.push_back(models[index]);
+                    }
+                }
+            }
+
+            ImGui::EndTable();
+        }
+    }
+
+    void draw_render_controls(GuiState& state) {
         ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Always);
 
         ImGui::Begin("Render Controls", nullptr, ImGuiWindowFlags_NoResize);
         ImGui::TextUnformatted("Tweak me!");
 
-        ImGui::SeparatorText("Scene");
-        ImGui::TextUnformatted("Model folder: -");
-        ImGui::TextUnformatted("Models: -");
+        draw_render_controls_scene_selection(state);
 
         ImGui::SeparatorText("View");
         ImGui::TextUnformatted("View mode: Shaded");
@@ -41,13 +157,35 @@ namespace {
         constexpr float render_button_width = 100.0f;
         const float right_alignment_offset = ImGui::GetContentRegionAvail().x - render_button_width;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + right_alignment_offset);
-        ImGui::Button("Render >:)", ImVec2(render_button_width, 0));
+        if (ImGui::Button("Render >:)", ImVec2(render_button_width, 0))) {
+            RenderSettings request = state.settings;
+            RenderResult result{false, 0.0, "No OBJ selected :<"}; // Default result
+            if (!request.model_paths.empty()) {
+                result = render(request);
+                state.last_result = result;
+            }
+
+            if (!result.succeeded) {
+                std::cerr << "Rendering failed with message: " << result.error << '\n';
+            } else {
+                std::clog << "Render time: " << result.duration_ms << " ms\n";
+            }
+        }
 
         ImGui::End();
     }
 }
 
 int launch_gui() {
+    GuiState state;
+    state.model_groups = discover_model_groups("obj");
+    if (!state.model_groups.empty()) {
+        state.selected_models.assign(
+            state.model_groups[0].models.size(),
+            false
+        );
+    }
+
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
         return 1;
@@ -102,7 +240,7 @@ int launch_gui() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        draw_render_controls();
+        draw_render_controls(state);
 
         ImGui::Render();
 
