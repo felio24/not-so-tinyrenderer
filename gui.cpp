@@ -1,3 +1,4 @@
+#include <array>
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include "imgui.h"
@@ -9,6 +10,31 @@
 #include "gui.h"
 
 namespace {
+    struct ViewModeOption {
+        ViewMode value;
+        const char* label;
+    };
+
+    constexpr std::array view_mode_options{
+        ViewModeOption{ViewMode::Shaded, "Shaded"},
+        ViewModeOption{ViewMode::Flat, "Flat"},
+        ViewModeOption{ViewMode::Wireframe, "Wireframe"},
+        ViewModeOption{ViewMode::Depth, "Depth"},
+        ViewModeOption{ViewMode::Barycentric, "Barycentric"},
+    };
+
+    struct ShaderModeOption {
+        ShaderMode shader;
+        const char* label;
+    };
+
+    constexpr std::array lighting_mode_options{
+        ShaderModeOption{ShaderMode::Diffuse, "Diffuse"},
+        ShaderModeOption{ShaderMode::PhongSpecular, "Phong"},
+        ShaderModeOption{ShaderMode::BlinnPhongSpecular, "Blinn-Phong"},
+        // ShaderModeOption{ShaderMode::Random, "Random"}, TODO: Implement Random shader
+    };
+
     struct GuiState {
         RenderSettings settings;
 
@@ -125,6 +151,105 @@ namespace {
         }
     }
 
+    const char* view_mode_label(ViewMode mode) {
+        for (const ViewModeOption& option : view_mode_options) {
+            if (option.value == mode) {
+                return option.label;
+            }
+        }
+
+        return "Unknown";
+    }
+
+    const char* lighting_mode_label(ShaderMode mode) {
+        for (const ShaderModeOption& option : lighting_mode_options) {
+            if (option.shader == mode) {
+                return option.label;
+            }
+        }
+
+        return "Unknown";
+    }
+
+    void draw_render_controls_view_selection(GuiState& state) {
+        std::vector<std::string> items = {};
+
+        ImGui::SeparatorText("View");
+
+        constexpr float label_width = 120.0f;
+
+        if (ImGui::BeginTable("view_fields", 2)) {
+            ImGui::TableSetupColumn(
+                "Label",
+                ImGuiTableColumnFlags_WidthFixed,
+                label_width
+            );
+            ImGui::TableSetupColumn(
+                "Field",
+                ImGuiTableColumnFlags_WidthStretch
+            );
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("View mode:");
+
+            const char* view_mode_preview = view_mode_label(state.settings.view_mode);
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            if (ImGui::BeginCombo("##view_folder", view_mode_preview)) {
+                for (const ViewModeOption& option : view_mode_options) {
+                    const bool selected =
+                        state.settings.view_mode == option.value;
+
+                    if (ImGui::Selectable(option.label, selected)) {
+                        state.settings.view_mode = option.value;
+                    }
+
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            const bool shaded = state.settings.view_mode == ViewMode::Shaded;
+            ImGui::BeginDisabled(!shaded);
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Lighting model:");
+
+            const char* lighting_mode_preview = lighting_mode_label(state.settings.shader_mode);
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            if (ImGui::BeginCombo("##lighting_folder", lighting_mode_preview)) {
+                for (const ShaderModeOption& option : lighting_mode_options) {
+                    const bool selected =
+                        state.settings.shader_mode == option.shader;
+
+                    if (ImGui::Selectable(option.label, selected)) {
+                        state.settings.shader_mode = option.shader;
+                    }
+
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::EndDisabled();
+
+            ImGui::EndTable();
+        }
+    }
+
     void draw_render_controls(GuiState& state) {
         ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Always);
 
@@ -132,10 +257,7 @@ namespace {
         ImGui::TextUnformatted("Tweak me!");
 
         draw_render_controls_scene_selection(state);
-
-        ImGui::SeparatorText("View");
-        ImGui::TextUnformatted("View mode: Shaded");
-        ImGui::TextUnformatted("Lighting model: Diffuse");
+        draw_render_controls_view_selection(state);
 
         ImGui::SeparatorText("Camera");
         ImGui::TextUnformatted("Eye: -1.0, 0.0, 2.0");
