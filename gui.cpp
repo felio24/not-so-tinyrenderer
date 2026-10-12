@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -43,6 +44,7 @@ namespace {
         std::vector<bool> selected_models;
 
         RenderResult last_result;
+        bool has_last_result = false;
         std::string validation_error;
     };
 
@@ -250,6 +252,120 @@ namespace {
         }
     }
 
+    void draw_render_controls_output(GuiState& state) {
+        ImGui::SeparatorText("Output");
+
+        if (ImGui::BeginTable("output_controls_fields", 2)) {
+            constexpr float label_width = 120.0f;
+
+            ImGui::TableSetupColumn(
+                "Label",
+                ImGuiTableColumnFlags_WidthFixed,
+                label_width
+            );
+            ImGui::TableSetupColumn(
+                "Field",
+                ImGuiTableColumnFlags_WidthStretch
+            );
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Width:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+            ImGui::InputInt("##width", &state.settings.width);
+            state.settings.width = std::clamp(state.settings.width, min_output_size, max_output_size);
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Height:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+            ImGui::InputInt("##height", &state.settings.height);
+            state.settings.height = std::clamp(state.settings.height, min_output_size, max_output_size);
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("File:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+            static char output_path[256] = "framebuffer.tga";
+            if (ImGui::InputTextWithHint("##output_path", "framebuffer.tga", output_path, IM_ARRAYSIZE(output_path))) {
+                state.settings.output_path = output_path;
+            };
+
+            ImGui::EndTable();
+        }
+    }
+
+    void draw_render_controls_output_message_and_button(GuiState& state) {
+        if (ImGui::BeginTable("output_fields", 2)) {
+            constexpr float render_button_width = 115.0f;
+            ImGui::TableSetupColumn(
+                "Output message",
+                ImGuiTableColumnFlags_WidthStretch
+            );
+            ImGui::TableSetupColumn(
+                "Render button",
+                ImGuiTableColumnFlags_WidthFixed,
+                render_button_width
+            );
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+
+            if (state.has_last_result) {
+                if (state.last_result.succeeded) {
+                    ImGui::TextColored(
+                        ImVec4(0.25f, 0.85f, 0.35f, 1.0f),
+                        "Render time: %.2f ms",
+                        state.last_result.duration_ms
+                    );
+                } else {
+                    ImGui::TextColored(
+                        ImVec4(0.95f, 0.25f, 0.25f, 1.0f),
+                        "Error: %s",
+                        state.last_result.error.c_str()
+                    );
+                }
+            }
+
+            ImGui::TableSetColumnIndex(1);
+            if (ImGui::Button("Render >:)", ImVec2(render_button_width, 0))) {
+                RenderSettings request = state.settings;
+                RenderResult result{false, 0.0, "No OBJ selected :<"}; // Default result
+                if (!request.model_paths.empty()) {
+                    result = render(request);
+                }
+
+                if (!result.succeeded) {
+                    std::cerr << "Rendering failed with message: " << result.error << '\n';
+                } else {
+                    std::clog << "Render time: " << result.duration_ms << " ms\n";
+                }
+
+                state.last_result = result;
+                state.has_last_result = true;
+            }
+
+            ImGui::EndTable();
+        }
+    }
+
     void draw_render_controls(GuiState& state) {
         ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Always);
 
@@ -271,28 +387,9 @@ namespace {
         ImGui::TextUnformatted("Specular: 1.0");
         ImGui::TextUnformatted("Shininess: 35.0");
 
-        ImGui::SeparatorText("Output");
-        ImGui::TextUnformatted("Size: 800 x 800");
-        ImGui::TextUnformatted("File: framebuffer.tga");
+        draw_render_controls_output(state);
         ImGui::Spacing();
-
-        constexpr float render_button_width = 100.0f;
-        const float right_alignment_offset = ImGui::GetContentRegionAvail().x - render_button_width;
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + right_alignment_offset);
-        if (ImGui::Button("Render >:)", ImVec2(render_button_width, 0))) {
-            RenderSettings request = state.settings;
-            RenderResult result{false, 0.0, "No OBJ selected :<"}; // Default result
-            if (!request.model_paths.empty()) {
-                result = render(request);
-                state.last_result = result;
-            }
-
-            if (!result.succeeded) {
-                std::cerr << "Rendering failed with message: " << result.error << '\n';
-            } else {
-                std::clog << "Render time: " << result.duration_ms << " ms\n";
-            }
-        }
+        draw_render_controls_output_message_and_button(state);
 
         ImGui::End();
     }

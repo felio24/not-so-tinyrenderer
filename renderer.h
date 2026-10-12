@@ -14,9 +14,12 @@ enum class ShaderMode {
     BlinnPhongSpecular
 };
 
+constexpr int min_output_size = 800;
+constexpr int max_output_size = 1920;
+
 struct RenderSettings {
-    int width = 800;
-    int height = 800;
+    int width = min_output_size;
+    int height = min_output_size;
 
     std::vector<std::filesystem::path> model_paths;
 
