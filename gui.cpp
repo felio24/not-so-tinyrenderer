@@ -252,6 +252,100 @@ namespace {
         }
     }
 
+    void draw_render_controls_camera(GuiState& state) {
+        ImGui::SeparatorText("Camera");
+
+        constexpr float label_width = 120.0f;
+
+        if (ImGui::BeginTable("camera_fields", 2)) {
+            ImGui::TableSetupColumn(
+                "Label",
+                ImGuiTableColumnFlags_WidthFixed,
+                label_width
+            );
+            ImGui::TableSetupColumn(
+                "Field",
+                ImGuiTableColumnFlags_WidthStretch
+            );
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Eye:");
+
+            ImGui::TableSetColumnIndex(1);
+
+            double eye[3] = {
+                state.settings.eye.x(),
+                state.settings.eye.y(),
+                state.settings.eye.z(),
+            };
+            if (ImGui::InputScalarN(
+                    "##eye",
+                    ImGuiDataType_Double,
+                    eye,
+                    3,
+                    nullptr,
+                    nullptr,
+                    "%.2f"
+                )) {
+                state.settings.eye = vec3{eye[0], eye[1], eye[2]};
+            }
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Target:");
+
+            ImGui::TableSetColumnIndex(1);
+            
+            double target[3] = {
+                state.settings.center.x(),
+                state.settings.center.y(),
+                state.settings.center.z(),
+            };
+            if (ImGui::InputScalarN(
+                    "##target",
+                    ImGuiDataType_Double,
+                    target,
+                    3,
+                    nullptr,
+                    nullptr,
+                    "%.2f"
+                )) {
+                state.settings.center = vec3{target[0], target[1], target[2]};
+            }
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Up:");
+
+            ImGui::TableSetColumnIndex(1);
+            double up[3] = {
+                state.settings.up.x(),
+                state.settings.up.y(),
+                state.settings.up.z(),
+            };
+            if (ImGui::InputScalarN(
+                    "##up",
+                    ImGuiDataType_Double,
+                    up,
+                    3,
+                    nullptr,
+                    nullptr,
+                    "%.2f"
+                )) {
+                state.settings.up = vec3{up[0], up[1], up[2]};
+            }
+
+            ImGui::EndTable();
+        }
+    }
+
     void draw_render_controls_output(GuiState& state) {
         ImGui::SeparatorText("Output");
 
@@ -347,10 +441,7 @@ namespace {
             ImGui::TableSetColumnIndex(1);
             if (ImGui::Button("Render >:)", ImVec2(render_button_width, 0))) {
                 RenderSettings request = state.settings;
-                RenderResult result{false, 0.0, "No OBJ selected :<"}; // Default result
-                if (!request.model_paths.empty()) {
-                    result = render(request);
-                }
+                RenderResult result = render(request);
 
                 if (!result.succeeded) {
                     std::cerr << "Rendering failed with message: " << result.error << '\n';
@@ -374,11 +465,7 @@ namespace {
 
         draw_render_controls_scene_selection(state);
         draw_render_controls_view_selection(state);
-
-        ImGui::SeparatorText("Camera");
-        ImGui::TextUnformatted("Eye: -1.0, 0.0, 2.0");
-        ImGui::TextUnformatted("Target: 0.0, 0.0, 0.0");
-        ImGui::TextUnformatted("Up: 0.0, 1.0, 0.0");
+        draw_render_controls_camera(state);
 
         ImGui::SeparatorText("Lighting and Material");
         ImGui::TextUnformatted("Light direction: 1.0, 1.0, 1.0");

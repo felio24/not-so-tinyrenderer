@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -45,5 +46,6 @@ struct RenderResult {
     std::string error;
 };
 
+std::optional<std::string> validate_render_settings(const RenderSettings& settings);
 RenderResult render(const RenderSettings& settings);
 RenderResult render_demo(const RenderSettings& settings);

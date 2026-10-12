@@ -93,6 +93,13 @@ class vec {
         return *this *= 1/t;
     }
 
+    bool operator==(const vec& v) const {
+        for (int i = 0; i < n; i++) {
+            if (e[i] != v.e[i]) return false;
+        }
+        return true;
+    }
+
     double length() const {
         return std::sqrt(length_squared());
     }

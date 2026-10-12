@@ -365,14 +365,44 @@ namespace {
     }
 }
 
+std::optional<std::string> validate_render_settings(const RenderSettings& settings) {
+    constexpr double epsilon = 1e-12;
+
+    if (settings.model_paths.empty()) {
+        return "No OBJ selected";
+    }
+
+    if ((settings.eye - settings.center).length_squared() < epsilon) {
+        return "Eye and Target vectors must not be the same";
+    }
+
+    if (settings.up.length_squared() < epsilon) {
+        return "Up vector must not be zero";
+    }
+
+    const vec3 view_direction = settings.eye - settings.center;
+    if (cross(settings.up, view_direction).length_squared() < epsilon) {
+        return "Up vector must not be parallel to the view direction";
+    }
+
+    return std::nullopt;
+}
+
 RenderResult render(const RenderSettings& settings) {
+    RenderResult result;
+
+    if (auto error = validate_render_settings(settings)) {
+        result.error = *error;
+        result.succeeded = false;
+        return result;
+    }
+
     lookat(settings.eye, settings.center, settings.up);                                            // build the ModelView matrix
     init_perspective((settings.eye-settings.center).length());                                     // build the Perspective matrix
     init_viewport(settings.width/16, settings.height/16, settings.width*7/8, settings.height*7/8); // build the Viewport matrix
     init_zbuffer(settings.width, settings.height);
 
     TGAImage framebuffer(settings.width, settings.height, TGAImage::RGB);
-    RenderResult result;
 
     const auto render_start = std::chrono::steady_clock::now();
     for(const std::filesystem::path& model_path : settings.model_paths) {
