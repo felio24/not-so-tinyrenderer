@@ -346,6 +346,108 @@ namespace {
         }
     }
 
+    void draw_render_controls_lighting_and_material(GuiState& state) {
+        ImGui::SeparatorText("Lighting and Material");
+
+        if (ImGui::BeginTable("lighting_material_fields", 2)) {
+            constexpr float label_width = 120.0f;
+
+            ImGui::TableSetupColumn(
+                "Label",
+                ImGuiTableColumnFlags_WidthFixed,
+                label_width
+            );
+            ImGui::TableSetupColumn(
+                "Field",
+                ImGuiTableColumnFlags_WidthStretch
+            );
+
+            ImGui::BeginDisabled(state.settings.view_mode != ViewMode::Shaded);
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Light direction:");
+
+            ImGui::TableSetColumnIndex(1);
+
+            double light[3] = {
+                state.settings.light_direction.x(),
+                state.settings.light_direction.y(),
+                state.settings.light_direction.z(),
+            };
+            if (ImGui::InputScalarN(
+                    "##light",
+                    ImGuiDataType_Double,
+                    light,
+                    3,
+                    nullptr,
+                    nullptr,
+                    "%.2f"
+                )) {
+                state.settings.light_direction = vec3{light[0], light[1], light[2]};
+            }
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Ambient:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+            constexpr double min_ambient = 0.0;
+            constexpr double max_ambient = 1.0;
+            ImGui::SliderScalar("##ambient", ImGuiDataType_Double, &state.settings.ambient, &min_ambient, &max_ambient, "%.2f");
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Diffuse:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+            constexpr double min_diffuse = 0.0;
+            constexpr double max_diffuse = 2.0;
+            ImGui::SliderScalar("##diffuse", ImGuiDataType_Double, &state.settings.diffuse, &min_diffuse, &max_diffuse, "%.2f");
+
+            ImGui::BeginDisabled(state.settings.shader_mode == ShaderMode::Diffuse);
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Specular:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+            constexpr double min_specular = 0.0;
+            constexpr double max_specular = 2.0;
+            ImGui::SliderScalar("##specular", ImGuiDataType_Double, &state.settings.specular, &min_specular, &max_specular, "%.2f");
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Shininess:");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+            constexpr double min_shininess = 1.0;
+            constexpr double max_shininess = 256.0;
+            ImGui::SliderScalar("##shininess", ImGuiDataType_Double, &state.settings.shininess, &min_shininess, &max_shininess, "%.0f");
+
+            ImGui::EndDisabled();
+            ImGui::EndDisabled();
+
+            ImGui::EndTable();
+        }
+    }
+
     void draw_render_controls_output(GuiState& state) {
         ImGui::SeparatorText("Output");
 
@@ -466,14 +568,7 @@ namespace {
         draw_render_controls_scene_selection(state);
         draw_render_controls_view_selection(state);
         draw_render_controls_camera(state);
-
-        ImGui::SeparatorText("Lighting and Material");
-        ImGui::TextUnformatted("Light direction: 1.0, 1.0, 1.0");
-        ImGui::TextUnformatted("Ambient: 0.4");
-        ImGui::TextUnformatted("Diffuse: 1.0");
-        ImGui::TextUnformatted("Specular: 1.0");
-        ImGui::TextUnformatted("Shininess: 35.0");
-
+        draw_render_controls_lighting_and_material(state);
         draw_render_controls_output(state);
         ImGui::Spacing();
         draw_render_controls_output_message_and_button(state);

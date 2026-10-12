@@ -385,6 +385,14 @@ std::optional<std::string> validate_render_settings(const RenderSettings& settin
         return "Up vector must not be parallel to the view direction";
     }
 
+    if (settings.view_mode != ViewMode::Shaded) {
+        return std::nullopt;
+    }
+
+    if (settings.light_direction.length_squared() < epsilon) {
+        return "Missing light";
+    }
+
     return std::nullopt;
 }
 
