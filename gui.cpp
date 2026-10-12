@@ -631,8 +631,33 @@ int launch_gui() {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init(glsl_version);
+    const bool glfw_backend_initialized = ImGui_ImplGlfw_InitForOpenGL(window, true);
+    const bool opengl_backend_initialized = ImGui_ImplOpenGL3_Init(glsl_version);
+
+    if (!glfw_backend_initialized || !opengl_backend_initialized) {
+        std::cerr << "Failed to initialize ImGui backend";
+
+        if (!glfw_backend_initialized) {
+            std::cerr << ": GLFW backend";
+        }
+        if (!opengl_backend_initialized) {
+            std::cerr << (glfw_backend_initialized ? ": " : " and ");
+            std::cerr << "OpenGL3 backend";
+        }
+        std::cerr << '\n';
+
+        if (opengl_backend_initialized) {
+            ImGui_ImplOpenGL3_Shutdown();
+        }
+        if (glfw_backend_initialized) {
+            ImGui_ImplGlfw_Shutdown();
+        }
+
+        ImGui::DestroyContext();
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return 1;
+    }
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
