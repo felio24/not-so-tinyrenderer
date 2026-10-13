@@ -37,7 +37,7 @@ struct RenderSettings {
     double specular = 1.0;
     double shininess = 35.0;
 
-    std::filesystem::path output_path{"framebuffer.tga"};
+    std::filesystem::path output_path{"renders/framebuffer.tga"};
 };
 
 struct RenderResult {

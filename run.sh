@@ -7,7 +7,7 @@ launch_gui=0
 view_mode="shaded"
 shader_mode="diffuse"
 model_path="obj/diablo3_pose/diablo3_pose.obj"
-output_path="framebuffer.tga"
+output_path="renders/framebuffer.tga"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -53,14 +53,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             echo "Usage: ./run.sh [--serial|--parallel] --gui"
-            echo "       ./run.sh [--serial|--parallel] [--shader random|diffuse|phong|blinnphong] [--fill shaded|flat|intensity|barycentric|wireframe] [--output framebuffer.tga] [--demo|path/to/model.obj]"
+            echo "       ./run.sh [--serial|--parallel] [--shader random|diffuse|phong|blinnphong] [--fill shaded|flat|intensity|barycentric|wireframe] [--output renders/framebuffer.tga] [--demo|path/to/model.obj]"
             echo
             echo "Defaults:"
             echo "  mode:  --serial"
             echo "  shader: diffuse"
             echo "  fill:  shaded"
             echo "  model: obj/diablo3_pose/diablo3_pose.obj"
-            echo "  output: framebuffer.tga"
+            echo "  output: renders/framebuffer.tga"
             exit 0
             ;;
         *)

@@ -497,8 +497,8 @@ namespace {
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 
-            static char output_path[256] = "framebuffer.tga";
-            if (ImGui::InputTextWithHint("##output_path", "framebuffer.tga", output_path, IM_ARRAYSIZE(output_path))) {
+            static char output_path[256] = "renders/framebuffer.tga";
+            if (ImGui::InputTextWithHint("##output_path", "renders/framebuffer.tga", output_path, IM_ARRAYSIZE(output_path))) {
                 state.settings.output_path = output_path;
             };
 
