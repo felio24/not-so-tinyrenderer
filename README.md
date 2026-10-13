@@ -1,67 +1,127 @@
-# Not So TinyRenderer Implementation Notes
+# Not So TinyRenderer
 
-This page tracks this repo's actual setup, current implementation state, and local workflow. The broader TinyRenderer tutorial roadmap lives in `PROJECT_OVERVIEW.md`.
+A smol CPU software renderer written in C++20. It loads Wavefront OBJ models, transforms them through a TinyRenderer-style camera pipeline, rasterizes triangles into a TGA framebuffer, and shades the result without using OpenGL, Vulkan, Metal, DirectX, or any GPU rasterization API.
 
-## Current State
+The project is inspired by Dmitry Sokolov's [TinyRenderer tutorial](https://haqr.eu/tinyrenderer/) and expands on it as a learning renderer with a command-line path, an ImGui-based GUI, texture sampling, debug views, and several shader modes.
 
-Already started:
+## Build Requirements
 
-- TGA framebuffer output.
-- Manual pixel setting.
-- Custom line drawing experiments.
-- `vec3` math type.
-- `Model` loader for OBJ vertex positions and face vertex indices.
-- Flattened face-index storage through `facet_vrt`.
-- Orthographic projection from 3D model coordinates to 2D screen coordinates.
-- Filled triangle rasterization using a bounding box and barycentric-style area tests.
-- Optional OpenMP parallelization for the triangle fill loop.
-- Render timing through `std::clog`.
+- CMake 3.14 or newer
+- A C++20 compiler
+- OpenGL development libraries
+- Network access during the first CMake configure, because GLFW and ImGui are fetched with CMake `FetchContent`
+- Optional: OpenMP for the parallel rasterization experiment
 
-Known current issue:
+On macOS, OpenMP support usually requires Homebrew `libomp`. The OpenMP path uses CPU threads; it does not move rasterization to the GPU.
 
-- Parallelizing inside each triangle can be slower than serial rendering because the OpenMP setup cost is paid for many small triangle loops.
+## Quick Start
 
-## Build And Run
-
-The easiest entry point is `run.sh`. It configures CMake, builds the project, then runs the renderer.
+Use the wrapper script to configure CMake, build the executable, and render the default model:
 
 ```bash
 ./run.sh
 ```
 
-Defaults:
+By default this renders:
 
-- Rasterization mode: serial.
-- Shader: `diffuse`.
-- Fill mode: `shaded`.
-- Model: `obj/diablo3_pose/diablo3_pose.obj`.
-- Output image: `framebuffer.tga`.
+- Model: `obj/diablo3_pose/diablo3_pose.obj`
+- Shader: `phong`
+- View mode: `shaded`
+- Rasterization: serial CPU path
+- Output: `renders/framebuffer.tga`
 
-Useful variants:
+Open `renders/framebuffer.tga` with an image viewer that supports TGA files.
+
+![Default model preview](renders/framebuffer.png)
+
+## GUI Mode
+
+Launch the interactive GUI with:
 
 ```bash
 ./run.sh --gui
-./run.sh --demo
-./run.sh obj/african_head/african_head.obj
-./run.sh --shader random obj/african_head/african_head.obj
-./run.sh --shader diffuse obj/african_head/african_head.obj
-./run.sh --shader random --output random.tga obj/african_head/african_head.obj
-./run.sh --shader diffuse --output diffuse.tga obj/african_head/african_head.obj
-./run.sh --fill intensity --demo
-./run.sh --fill barycentric obj/diablo3_pose/diablo3_pose.obj
-./run.sh --parallel obj/diablo3_pose/diablo3_pose.obj
-./run.sh --serial obj/diablo3_pose/diablo3_pose.obj
 ```
 
-Show script usage:
+The GUI discovers models under `obj/`, lets you select meshes, switch view and lighting modes, adjust render settings, and render without retyping command-line options.
+
+For multi-part models, select each OBJ file that should be included in the render. The selected files are rendered in the order shown in the model list.
+
+## Command-Line Usage
+
+Render a single OBJ file by passing the file path:
+
+```bash
+./run.sh obj/diablo3_pose/diablo3_pose.obj
+```
+
+Render every OBJ file in a directory by passing the directory path:
+
+```bash
+./run.sh obj/boggie
+```
+
+Directory inputs are searched recursively, then the matching `.obj` paths are sorted before rendering. For `obj/boggie`, the command-line render order is:
+
+```text
+obj/boggie/body.obj
+obj/boggie/eyes.obj
+obj/boggie/head.obj
+```
+
+All selected models are drawn into the same framebuffer and z-buffer. That means the order is deterministic, but normal opaque visibility is still decided by depth testing: a later model does not overwrite an earlier one unless its fragments pass the z-buffer test.
+
+### Rendering Options
+
+Use `--shader` to choose the lighting model and `--fill` to choose how triangle fragments are visualized.
+
+| Option | Values | Purpose |
+| --- | --- | --- |
+| `--shader` | `diffuse`, `phong`, `blinnphong` | Selects the fragment shader used when `--fill shaded` is active |
+| `--fill` | `shaded`, `flat`, `depth`, `barycentric`, `wireframe` | Selects the final visualization written to the framebuffer |
+| `--output` | Any `.tga` path | Writes the render to a custom output path |
+
+Shader comparison:
+
+| Command | Output |
+| --- | --- |
+| `./run.sh --shader diffuse` | Ambient plus Lambert diffuse lighting |
+| `./run.sh --shader phong` | Diffuse lighting plus reflection-vector specular highlights |
+| `./run.sh --shader blinnphong` | Diffuse lighting plus half-vector specular highlights |
+
+| Diffuse | Phong | Blinn-Phong |
+| --- | --- | --- |
+| <img src="renders/diffuse.png" width="360"> | <img src="renders/phong.png" width="360"> | <img src="renders/blinnphong.png" width="360"> |
+
+Debug view comparison:
+
+| Command | Output |
+| --- | --- |
+| `./run.sh --fill flat` | One random color per triangle |
+| `./run.sh --fill depth` | Grayscale depth/intensity view |
+| `./run.sh --fill barycentric` | Barycentric coordinates as color channels |
+| `./run.sh --fill wireframe` | Triangle edges derived from barycentric coordinates |
+
+| Flat (Per-Triangle Random) | Barycentric | Wireframe | Depth |
+| --- | --- | --- | --- |
+| <img src="renders/flat.png" width="270"> | <img src="renders/barycentric.png" width="270"> | <img src="renders/wireframe.png" width="270"> | <img src="renders/depth.png" width="270"> |
+
+Show all wrapper options:
 
 ```bash
 ./run.sh --help
 ```
 
-## Build Options
+## Manual Build
 
-Parallel rasterization is controlled by the CMake cache variable `RASTERIZER_PARALLEL`.
+The wrapper script is the easiest path, but the project can also be built directly with CMake:
+
+```bash
+cmake -S . -B build
+cmake --build build -j
+build/not_so_tinyrenderer obj/diablo3_pose/diablo3_pose.obj
+```
+
+To enable the experimental OpenMP rasterizer:
 
 ```bash
 cmake -S . -B build -DRASTERIZER_PARALLEL=1
@@ -69,99 +129,99 @@ cmake --build build -j
 build/not_so_tinyrenderer obj/diablo3_pose/diablo3_pose.obj
 ```
 
-Use `RASTERIZER_PARALLEL=0` to return to the serial baseline.
+Use `-DRASTERIZER_PARALLEL=0` to return to the serial baseline.
 
-On macOS, OpenMP uses CPU threads through Homebrew `libomp`; it does not use the GPU.
-
-## Shader Modes
-
-The model render can switch shaders without editing the source:
-
-- `random`: one random color per triangle.
-- `diffuse`: ambient plus Lambert diffuse lighting.
-- `phong`: ambient, Lambert diffuse, and reflection-vector specular lighting.
-- `blinnphong`: ambient, Lambert diffuse, and half-vector specular lighting.
-
-```bash
-./run.sh --shader random
-./run.sh --shader diffuse
-./run.sh --shader phong
-./run.sh --shader blinnphong
-```
-
-For quick visual comparisons, run the same model with different `--shader` and `--output` values.
-
-### Object-Space And Tangent-Space Normal Maps
-
-The model assets provide two alternative representations of the same kind of per-fragment surface detail:
-
-- `_nm.tga` stores normals in object space. Decode the sampled RGB value from `[0, 1]` to `[-1, 1]`, transform the resulting direction from object space into the lighting space, normalize it, and use it as the shading normal.
-- `_nm_tangent.tga` stores normals relative to the surface's local tangent frame. Decode the sample, multiply it by a TBN matrix whose columns are the tangent, bitangent, and mesh normal expressed in the lighting space, normalize the result, and use it as the shading normal.
-
-These maps are alternatives; they should not be combined. Prefer the tangent-space map when the mesh has mirrored or reused UV regions, deforms, or needs conventional asset-pipeline compatibility. An object-space map remains useful as a simpler fallback when it was baked for a fixed mesh and its UV layout does not reuse texels across incompatible surface orientations.
-
-In the current eye-space shader design, `tri` and `tri_norm` are already stored in eye space. A TBN frame derived from them is therefore also in eye space, so the tangent-space sample is transformed by `TBN` only and must not be transformed by `ModelView` a second time:
+## Project Layout
 
 ```text
-_nm_tangent sample
-  -> decode RGB to a tangent-space direction
-  -> eye-space TBN * tangent-space direction
-  -> normalize
-  -> use for diffuse and specular lighting
+.
+├── main.cpp              CLI entry point and GUI launch path
+├── gui.cpp/.h            ImGui controls
+├── renderer.cpp/.h       Render settings, render loop, shader selection
+├── notverygl.cpp/.h      Tiny OpenGL-like transform and rasterization helpers
+├── model.cpp/.h          OBJ and texture loading
+├── modelgroup.cpp/.h     Model discovery/grouping for the GUI
+├── mat.h, vec3.h         Math helpers
+├── tgaimage.cpp/.h       TGA image IO
+├── obj/                  Sample OBJ assets
+├── run.sh                Build-and-run wrapper
 ```
 
-The interpolated mesh normal is still needed as the `N` axis of the TBN frame. The TBN-transformed texture sample replaces that interpolated normal only as the final normal used by the lighting equations. If no usable normal map is available, the shader falls back to the interpolated mesh normal.
+## Renderer Concepts
 
-## View Modes
-
-Triangle coloring can be switched without changing the rasterizer code:
-
-- `shaded`: use the selected shader's fragment color.
-- `flat`: one random color per triangle.
-- `intensity`: interpolate a scalar value across the triangle and display it as grayscale.
-- `barycentric`: show barycentric coordinates as RGB-style channel gradients. The storage order is BGRA, so the helper handles the channel packing.
-- `wireframe`: show triangle edges using the barycentric coordinates.
-
-```bash
-./run.sh --fill shaded
-./run.sh --fill flat
-./run.sh --fill intensity
-./run.sh --fill barycentric
-./run.sh --fill wireframe
-```
-
-## Depth Convention
-
-The depth buffer stores real model-space `z` values, initialized to `-infinity`.
-Larger `z` values are treated as closer to the camera, so nearer pixels overwrite farther pixels in the z-buffer test.
-Only the debug `zbuffer.tga` maps model-space `z` from `[-1, 1]` into grayscale `[0, 255]`, with farther pixels darker and closer pixels brighter.
-
-## Runtime Output
-
-At startup, the renderer logs whether OpenMP rasterization is active:
+The renderer follows the same broad shape as a real graphics pipeline, but implemented directly on the CPU:
 
 ```text
-OpenMP rasterization disabled
+OBJ mesh data
+  -> object-space vertices, normals, UVs, textures
+  -> model/view transform
+  -> perspective projection
+  -> viewport transform
+  -> triangle rasterization
+  -> barycentric interpolation
+  -> z-buffer depth test
+  -> fragment shading
+  -> TGA framebuffer
 ```
 
-or:
+### Rasterization
 
-```text
-OpenMP enabled with N threads
-```
+Triangles are projected to screen space and filled by scanning a bounding box around each projected triangle. For each candidate pixel, barycentric coordinates decide whether the pixel lies inside the triangle. The same barycentric weights are then reused to interpolate values such as depth, UV coordinates, normals, and debug colors.
 
-After rendering, it logs the render duration:
+### Depth
 
-```text
-Render time: <value> ms
-```
+The depth buffer stores floating-point depth values and starts at negative infinity. Larger depth values are treated as closer to the camera, so a fragment replaces the stored pixel only when its interpolated depth is greater than the current z-buffer value.
 
-The timer measures the render call only. Writing `framebuffer.tga` is outside the measured section.
+### Shading
 
-## Practical Notes
+The shaded path evaluates fragment color after rasterization and depth testing. Depending on the selected shader, it can use ambient light, Lambert diffuse lighting, Phong-style reflection-vector specular highlights, or Blinn-Phong half-vector specular highlights.
 
-- Keep `framebuffer.tga` and optionally `zbuffer.tga` as the main output artifacts.
-- Prefer small visual tests before rendering full models.
-- Each renderer milestone should have one known-good model render.
-- Avoid committing while debug-only triangle highlighting or noisy `std::clog` output is still in the main path.
-- Keep setup/build convenience work in scripts or docs so rasterizer code remains focused on rendering concepts.
+The renderer can also sample model textures when the corresponding files are present beside the OBJ asset. Tangent-space normal maps are transformed through a per-triangle TBN frame before lighting; object-space normal maps are transformed into the renderer's lighting space directly.
+
+### View Modes
+
+The same rasterizer can produce final shaded output or diagnostic views. The diagnostic modes expose intermediate data: flat per-triangle color, depth, barycentric weights, and wireframe edges. These are useful for checking whether projection, triangle coverage, and interpolation are behaving as expected.
+
+## Development Roadmap
+
+This is an educational renderer rather than a production rendering engine. The goal is to keep building toward a compact, understandable CPU graphics pipeline while making each milestone visible and testable.
+
+Implemented so far:
+
+- OBJ model loading, including multi-file model groups
+- TGA framebuffer output
+- Triangle rasterization with barycentric coordinates
+- Z-buffered hidden-surface removal
+- Camera, perspective, and viewport transforms
+- Diffuse, Phong, and Blinn-Phong-style shading
+- Diffuse, specular, object-space normal, and tangent-space normal map sampling
+- Debug views for flat color, depth, barycentric coordinates, and wireframe edges
+- Command-line and GUI render paths
+- Serial rendering plus an experimental OpenMP rasterization switch
+
+Active or likely next improvements:
+
+- The OpenMP path can be slower for small triangle workloads because thread setup overhead can dominate the work
+- Add perspective-correct interpolation for pre-projection attributes such as UVs, normals, and eye-space positions
+- Extend the OBJ loader beyond the bundled TinyRenderer-style assets
+- Add shadow mapping
+- Alpha handling
+- Explore ambient occlusion or another indirect-lighting approximation
+- Add toon/cel shading as a stylized rendering mode
+- Continue improving GUI controls for comparing models, shaders, and debug views
+
+
+## References
+
+- [TinyRenderer tutorial](https://haqr.eu/tinyrenderer/)
+- [Original TinyRenderer repository](https://github.com/ssloy/tinyrenderer)
+
+### Asset Credits
+
+The sample OBJ models and textures under `obj/` are third-party educational assets used for renderer demos
+
+| Asset | Path | Credit / Source | Usage note |
+| --- | --- | --- | --- |
+| African head | `obj/african_head/` | Vidar Rapp, via TinyRenderer sample assets | Permission note included in `obj/african_head/readme.txt` |
+| Boggie | `obj/boggie/` | Bojana Nedeljkovic | Permission note included in `obj/boggie/readme.txt` |
+| Diablo pose | `obj/diablo3_pose/` | Samuel Sharit | Permission note included in `obj/diablo3_pose/readme.txt` |

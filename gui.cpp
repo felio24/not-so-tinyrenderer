@@ -18,7 +18,7 @@ namespace {
 
     constexpr std::array view_mode_options{
         ViewModeOption{ViewMode::Shaded, "Shaded"},
-        ViewModeOption{ViewMode::Flat, "Flat"},
+        ViewModeOption{ViewMode::Flat, "Per-triangle random"},
         ViewModeOption{ViewMode::Wireframe, "Wireframe"},
         ViewModeOption{ViewMode::Depth, "Depth"},
         ViewModeOption{ViewMode::Barycentric, "Barycentric"},

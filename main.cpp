@@ -33,7 +33,7 @@ extern std::vector<double> zbuffer; // the depth buffer
 std::optional<ViewMode> parse_view_mode(const std::string& mode) {
     if (mode == "shaded") return ViewMode::Shaded;
     if (mode == "flat") return ViewMode::Flat;
-    if (mode == "intensity") return ViewMode::Depth;
+    if (mode == "depth") return ViewMode::Depth;
     if (mode == "barycentric") return ViewMode::Barycentric;
     if (mode == "wireframe") return ViewMode::Wireframe;
     return std::nullopt;
@@ -201,7 +201,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " path/to/model.obj\n"
                   << "       " << argv[0] << " --demo\n"
-                  << "       " << argv[0] << " --shader random|diffuse|phong|blinnphong --fill shaded|flat|intensity|barycentric|wireframe --output framebuffer.tga path/to/model.obj\n";
+                  << "       " << argv[0] << " --shader random|diffuse|phong|blinnphong --fill shaded|flat|depth|barycentric|wireframe --output framebuffer.tga path/to/model.obj\n";
         return 1;
     }
 
@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--fill") {
             if (i + 1 >= argc) {
-                std::cerr << "--fill expects shaded, flat, intensity, barycentric, or wireframe\n";
+                std::cerr << "--fill expects shaded, flat, depth, barycentric, or wireframe\n";
                 return 1;
             }
             const std::optional<ViewMode> parsed_view_mode = parse_view_mode(argv[++i]);

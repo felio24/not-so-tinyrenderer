@@ -5,7 +5,7 @@ set -e
 parallel=0
 launch_gui=0
 view_mode="shaded"
-shader_mode="diffuse"
+shader_mode="phong"
 model_path="obj/diablo3_pose/diablo3_pose.obj"
 output_path="renders/framebuffer.tga"
 
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --fill)
             if [[ $# -lt 2 ]]; then
-                echo "--fill expects shaded, flat, intensity, barycentric, or wireframe" >&2
+                echo "--fill expects shaded, flat, depth, barycentric, or wireframe" >&2
                 exit 1
             fi
             view_mode="$2"
@@ -37,7 +37,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --shader)
             if [[ $# -lt 2 ]]; then
-                echo "--shader expects random, diffuse, phong, or blinnphong" >&2
+                echo "--shader expects diffuse, phong, or blinnphong" >&2
                 exit 1
             fi
             shader_mode="$2"
@@ -53,11 +53,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             echo "Usage: ./run.sh [--serial|--parallel] --gui"
-            echo "       ./run.sh [--serial|--parallel] [--shader random|diffuse|phong|blinnphong] [--fill shaded|flat|intensity|barycentric|wireframe] [--output renders/framebuffer.tga] [--demo|path/to/model.obj]"
+            echo "       ./run.sh [--serial|--parallel] [--shader diffuse|phong|blinnphong] [--fill shaded|flat|depth|barycentric|wireframe] [--output renders/framebuffer.tga] [--demo|path/to/model.obj]"
             echo
             echo "Defaults:"
             echo "  mode:  --serial"
-            echo "  shader: diffuse"
+            echo "  shader: phong"
             echo "  fill:  shaded"
             echo "  model: obj/diablo3_pose/diablo3_pose.obj"
             echo "  output: renders/framebuffer.tga"

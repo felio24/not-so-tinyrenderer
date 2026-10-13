@@ -1,11 +1,19 @@
-*.tga
-zbuffer.txt
-PROJECT_OVERVIEW.md
-FLASHCARD_CONCEPTS.md
-AGENTS.md
+# Build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
 
-# macOS
+# Generated render outputs
+renders/*.tga
+
+### ImGui setup ###
+imgui.ini
+
+### macOS ###
 .DS_Store
 
-# VS Code settings
+### VSCode ###
 .vscode/*
